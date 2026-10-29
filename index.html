@@ -282,7 +282,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
     <div class="feed" id="mapSlot"><canvas id="map"></canvas><span class="feed-label">MAP &middot; N&uarr;</span></div>
     <div id="live" class="live">
       <h4 id="liveTitle">Live take</h4>
-      <div class="quick"><span>Gimbal</span><div class="seg small" id="liveGp"></div><span>Flight</span><div class="seg small" id="liveFm"></div></div>
+      <div class="quick"><span>Gimbal</span><div class="seg small" id="liveGp"></div><span>Flight</span><div class="seg small" id="liveFm"></div><span>Wind</span><div class="seg small" id="liveWind"></div></div>
       <div id="liveRows"></div>
       <div class="sticks">
         <div class="stickbox"><span id="stCamLab">CAMERA</span><canvas id="stCam" width="160" height="80"></canvas></div>
@@ -450,6 +450,20 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
       <div id="djiNotes"></div>
     </section>
     <section>
+      <h3>Xbox and other gamepads</h3>
+      <dl class="kbd">
+        <dt>Sticks</dt><dd>Pilot, Mode 2: left stick climb and yaw, right stick forward, back and sideways. Camera seat: right stick pans and tilts.</dd>
+        <dt>RT / LT</dt><dd>FPV camera tilt up / down (the RC's left dial)</dd>
+        <dt>A</dt><dd>Roll camera, go again</dd>
+        <dt>B</dt><dd>Back to the menu from the brief or results</dd>
+        <dt>X</dt><dd>Next gimbal rate profile</dd>
+        <dt>Y</dt><dd>Next flight mode (T, N, S, A)</dd>
+        <dt>View</dt><dd>Swap main feed and FPV</dd>
+        <dt>Menu</dt><dd>Cut (pause) and resume</dd>
+      </dl>
+      <p class="hint">Plug in by USB or pair over Bluetooth, then press a button so the browser sees it. Thumbsticks have short travel, so raise the EXP in Settings if it feels twitchy. For two people, use two pads, or a pad and a DJI controller, and pick them under Seats.</p>
+    </section>
+    <section>
       <h3>Keyboard and mouse</h3>
       <dl class="kbd">
         <dt>Arrow keys</dt><dd>Gimbal pan and tilt (hold Shift for fine)</dd>
@@ -463,7 +477,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <dt>T</dt><dd>RC Plus layout: show or hide the take panel</dd>
         <dt>G</dt><dd>Framing guides on and off</dd>
         <dt>C</dt><dd>Next gimbal rate profile (1, 2, 3)</dd>
-        <dt>F</dt><dd>Next flight mode (T, N, S)</dd>
+        <dt>F</dt><dd>Next flight mode (T, N, S, A)</dd>
         <dt>M</dt><dd>Sandbox: record a move</dd>
         <dt>[ and ]</dt><dd>Sandbox: car slower / faster</dd>
         <dt>1 to 6</dt><dd>Sandbox: change lens</dd>
@@ -502,7 +516,16 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <label class="field" for="fpExpo"><span>Pitch, throttle, yaw EXP <b id="vFpExpo"></b></span><input type="range" id="fpExpo" min="0" max="0.9" step="0.01"></label>
         <label class="field" for="fpRollExpo"><span>Roll EXP <b id="vFpRollExpo"></b></span><input type="range" id="fpRollExpo" min="0" max="0.9" step="0.01"></label>
       </div>
-      <p class="hint">Capped at the Inspire 3's published limits: 26 m/s, 8 m/s climb and descent, 150&deg;/s yaw. Responsiveness is how hard it accelerates and brakes. Higher EXP softens small stick inputs around centre; roll has its own.</p>
+      <p class="hint">Capped at the Inspire 3's published limits: 26 m/s, 8 m/s climb and descent, 150&deg;/s yaw. Responsiveness is how hard it accelerates and brakes. Higher EXP softens small stick inputs around centre; roll has its own. In A mode the sticks set the lean angle (up to 35&deg;), so max speed and responsiveness don't apply.</p>
+    </section>
+    <section>
+      <h3>Wind</h3>
+      <div class="cols">
+        <label class="field" for="wSpeed"><span>Wind speed <b id="vWSpeed"></b></span><input type="range" id="wSpeed" min="0" max="14" step="0.5"></label>
+        <label class="field" for="wDir"><span>Blowing from <b id="vWDir"></b></span><input type="range" id="wDir" min="0" max="345" step="15"></label>
+      </div>
+      <div class="field"><span>Gusts</span><div class="seg" id="wGust"></div></div>
+      <p class="hint">The Inspire 3 is rated for 14 m/s (31 mph) in flight and 12 m/s for takeoff and landing. In T, N and S it leans into the wind and holds its spot; gusts knock it off briefly. In A mode nothing holds it, so it drifts with the wind. Wind is lighter near the ground.</p>
     </section>
     <section>
       <h3>Display</h3>
@@ -530,11 +553,13 @@ if(!window.THREE){$('#fatal').hidden=false;return;}
 /* ---------- Aircraft and camera figures ---------- */
 // From DJI's Inspire 3 spec page and user manual v3.0. Values marked "est." are not published and are training estimates.
 const SPEC={
-  vmax:{T:3,N:15,S:26},          // m/s horizontal. S 26 m/s (94 km/h) published; N 15 from the v1.0 manual (unconfirmed); T est.
-  yawMax:{T:30,N:100,S:150},     // deg/s. 150 published max; T and N est.
-  tiltLim:{T:20,N:35,S:40},      // deg max pitch angle, published
-  accel:{T:2,N:6,S:9},           // m/s^2 response limit, est.
-  tau:{T:.8,N:.45,S:.3},         // s velocity response lag, est.
+  vmax:{T:3,N:15,S:26,A:26},     // m/s horizontal. S 26 m/s (94 km/h) published; N 15 from the v1.0 manual (unconfirmed); T est. A: no limit beyond tilt and drag
+  yawMax:{T:30,N:100,S:150,A:100},// deg/s. 150 published max; T, N and A est.
+  tiltLim:{T:20,N:35,S:40,A:35}, // deg max tilt, published (emergency brake 55)
+  accel:{T:2,N:6,S:9,A:6},       // m/s^2 response limit, est.
+  tau:{T:.8,N:.45,S:.3,A:.25},   // s velocity response lag (A: lean response), est.
+  windMax:14,                    // m/s in-flight wind resistance, published (12 for takeoff and landing)
+  dragK:.011,                    // 1/m quadratic drag, est.: about 37 deg of lean holds 26 m/s in still air
   vUp:8,vDown:8,                 // m/s, published
   tiltMin:-90,tiltMax:30,        // deg controllable tilt (extension off), published
   fpvTiltMin:-60,fpvTiltMax:20,  // deg FPV camera tilt, pitch-stabilised. DJI publishes no range: est.
@@ -551,7 +576,7 @@ const LENSES=[
   {id:'75',label:'DL 75mm F1.8',f:75},
   {id:'90',label:'Viltrox AF 90mm F3.5 Air',f:90}
 ];
-const FLIGHT_MODES=[{id:'T',label:'T - Tripod (slow, fine)'},{id:'N',label:'N - Normal'},{id:'S',label:'S - Sport (fast)'}];
+const FLIGHT_MODES=[{id:'T',label:'T - Tripod (slow, fine)'},{id:'N',label:'N - Normal'},{id:'S',label:'S - Sport (fast)'},{id:'A',label:'A - ATTI (no position hold, drifts with the wind)'}];
 
 /* ---------- Small math ---------- */
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
@@ -582,17 +607,19 @@ const GIMBAL_PROFILES=[
 const FLIGHT_PROFILES={
   T:{vmax:SPEC.vmax.T,up:2,down:2,yaw:SPEC.yawMax.T,accel:SPEC.accel.T,expo:.35,rollExpo:.6},
   N:{vmax:SPEC.vmax.N,up:6,down:6,yaw:SPEC.yawMax.N,accel:SPEC.accel.N,expo:.3,rollExpo:.6},
-  S:{vmax:SPEC.vmax.S,up:8,down:8,yaw:SPEC.yawMax.S,accel:SPEC.accel.S,expo:.2,rollExpo:.5}};
+  S:{vmax:SPEC.vmax.S,up:8,down:8,yaw:SPEC.yawMax.S,accel:SPEC.accel.S,expo:.2,rollExpo:.5},
+  A:{vmax:SPEC.vmax.A,up:6,down:6,yaw:SPEC.yawMax.A,accel:SPEC.accel.A,expo:.3,rollExpo:.6}};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',screen:'rcplus',
-  gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
+  wind:{speed:0,dir:270,gust:'light'},gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
 const settings=Object.assign(clone(DEFAULTS),store.get('settings',{}));
 if(!SPEC.vmax[settings.flightMode])settings.flightMode='N';
 if(!(settings.v>=2)||!['right','fpv','split'].includes(settings.camLayout))settings.camLayout='right';
 if(!['rcplus','monitor'].includes(settings.screen))settings.screen='rcplus';
 if(!(settings.v>=3)){settings.gimbalProfiles=clone(GIMBAL_PROFILES);settings.flightProfiles=clone(FLIGHT_PROFILES);settings.gimbalProfile=1;}
 settings.v=3;
-for(const m in FLIGHT_PROFILES){const f=settings.flightProfiles[m];if(f&&f.rollExpo==null)f.rollExpo=FLIGHT_PROFILES[m].rollExpo;}
+for(const m in FLIGHT_PROFILES){if(!settings.flightProfiles[m])settings.flightProfiles[m]=clone(FLIGHT_PROFILES[m]);const f=settings.flightProfiles[m];if(f.rollExpo==null)f.rollExpo=FLIGHT_PROFILES[m].rollExpo;}
+if(!settings.wind||typeof settings.wind.speed!=='number')settings.wind=clone(DEFAULTS.wind);
 const gimbalProf=()=>settings.gimbalProfiles[settings.gimbalProfile]||settings.gimbalProfiles[1];
 const flightProf=()=>settings.flightProfiles[settings.flightMode]||settings.flightProfiles.N;
 const saveSettings=()=>store.set('settings',settings);
@@ -914,7 +941,27 @@ function pickStart(sh){
 const S={mode:'home',role:store.get('role','camera'),shot:SANDBOX,t:0,cd:0,lensId:'35',focal:35,swap:false,split:false,
   sandSpeed:16,carStopped:false,take:0,fly:null,clearY:0,result:null,crash:null,pausedFrom:null};
 const FPV_PITCH_LEAK=.1;   // share of aircraft pitch the FPV camera's stabiliser lets through
-const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0,fpvTilt:-10*DEG};
+// acc: actual acceleration. cmd: the flight controller's lagged acceleration demand. ff: its running estimate of the wind
+// force it has to cancel. thrust: horizontal thrust (sets the lean). hold: the spot it holds with the sticks centred (GPS modes).
+const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0,fpvTilt:-10*DEG,
+  cmd:{x:0,z:0},ff:{x:0,z:0},thrust:{x:0,z:0},hold:null};
+const GRAV=9.81,FF_TAU=.8;   // s for the flight controller to cancel a change in wind, est.
+// Wind: the mean wind from Settings plus gusts (a random process with about 1.5 s memory), weaker near the ground
+const wind={x:0,z:0,gx:0,gz:0};
+const GUSTS={off:0,light:.15,strong:.35};
+const randn=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*Math.random());};
+function windStep(dt){
+  const w=settings.wind,sd=w.speed>0?(GUSTS[w.gust]||0):0,sg=sd?sd*w.speed+.3:0,tg=1.5,q=Math.sqrt(2*dt/tg);
+  wind.gx+=-wind.gx/tg*dt+sg*q*randn();wind.gz+=-wind.gz/tg*dt+sg*q*randn();
+  const agl=Math.max(1,drone.pos.y-terrainH(drone.pos.x,drone.pos.z)),hf=clamp(Math.pow(agl/10,.14),.6,1.25),a=w.dir*DEG;
+  // dir is where the wind blows FROM (0 = north). World x is east and z is south, so the air moves the other way.
+  wind.x=(-Math.sin(a)*w.speed+wind.gx)*hf;wind.z=(Math.cos(a)*w.speed+wind.gz)*hf;
+}
+const _drag={x:0,z:0};
+function dragAcc(vx,vz){const ax=vx-wind.x,az=vz-wind.z,k=Math.hypot(ax,az)*SPEC.dragK;_drag.x=-ax*k;_drag.z=-az*k;return _drag;}
+// The flight controller has already settled against the current wind (start of a take, reset)
+function settleFlight(){const d=dragAcc(drone.vel.x,drone.vel.z);drone.ff.x=-d.x;drone.ff.z=-d.z;drone.cmd.x=drone.cmd.z=0;drone.thrust.x=drone.ff.x;drone.thrust.z=drone.ff.z;drone.hold=null;}
+const compass=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((d%360)+360)%360/45)%8];
 const gim={pan:0,tilt:0,panRate:0,tiltRate:0,prevW:0,prevT:0,rel:0};
 const P=new THREE.Vector3(),Pprev=new THREE.Vector3(),Vp=new THREE.Vector3(),Vprev=new THREE.Vector3(),Ap=new THREE.Vector3();
 const _v=new THREE.Vector3(),_w=new THREE.Vector3();
@@ -957,7 +1004,9 @@ function autoStep(dt){
   const w=2.4,z=1;
   let ax=w*w*(P.x-drone.pos.x)+2*z*w*(Vp.x-drone.vel.x),ay=w*w*(P.y-drone.pos.y)+2*z*w*(Vp.y-drone.vel.y),az=w*w*(P.z-drone.pos.z)+2*z*w*(Vp.z-drone.vel.z);
   const al=Math.hypot(ax,ay,az);if(al>12){ax*=12/al;ay*=12/al;az*=12/al;}
-  drone.vel.x+=ax*dt;drone.vel.y+=ay*dt;drone.vel.z+=az*dt;
+  const d=dragAcc(drone.vel.x,drone.vel.z),kf=1-Math.exp(-dt/FF_TAU);drone.ff.x+=(-d.x-drone.ff.x)*kf;drone.ff.z+=(-d.z-drone.ff.z)*kf;
+  drone.thrust.x=ax+drone.ff.x;drone.thrust.z=az+drone.ff.z;
+  drone.vel.x+=(ax+d.x+drone.ff.x)*dt;drone.vel.y+=ay*dt;drone.vel.z+=(az+d.z+drone.ff.z)*dt;
   const hs=Math.hypot(drone.vel.x,drone.vel.z);if(hs>SPEC.vmax.S){drone.vel.x*=SPEC.vmax.S/hs;drone.vel.z*=SPEC.vmax.S/hs;}
   drone.vel.y=clamp(drone.vel.y,-SPEC.vDown,SPEC.vUp);
   drone.pos.addScaledVector(drone.vel,dt);drone.acc.set(ax,ay,az);
@@ -967,11 +1016,27 @@ function autoStep(dt){
 function pilotStep(dt,inp){
   const fm=settings.flightMode,fp=flightProf(),vmax=Math.min(fp.vmax,SPEC.vmax.S),ex=x=>expo(x,fp.expo,settings.deadband);
   const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
-  const p=ex(inp.pitch)*vmax,r=expo(inp.roll,fp.rollExpo,settings.deadband)*vmax,thr=ex(inp.thr);
-  const tvx=fx*p+rx*r,tvz=fz*p+rz*r,tvy=thr>0?thr*Math.min(fp.up,SPEC.vUp):thr*Math.min(fp.down,SPEC.vDown);
-  // The aircraft has to lean before it accelerates, so acceleration builds over tau/3 instead of jumping: no lurch on small inputs
-  const tau=SPEC.tau[fm];let ax=(tvx-drone.vel.x)/tau,az=(tvz-drone.vel.z)/tau;const al=Math.hypot(ax,az);if(al>fp.accel){ax*=fp.accel/al;az*=fp.accel/al;}
-  const ka=1-Math.exp(-dt/(tau/3));drone.acc.x+=(ax-drone.acc.x)*ka;drone.acc.z+=(az-drone.acc.z)*ka;
+  const db=settings.deadband,thr=ex(inp.thr),tvy=thr>0?thr*Math.min(fp.up,SPEC.vUp):thr*Math.min(fp.down,SPEC.vDown),d=dragAcc(drone.vel.x,drone.vel.z);
+  if(fm==='A'){
+    // ATTI: the sticks set the lean angle and nothing holds position, so the aircraft drifts with the wind
+    const lim=SPEC.tiltLim.A*DEG,tf=GRAV*Math.tan(expo(inp.pitch,fp.expo,db)*lim),tr=GRAV*Math.tan(expo(inp.roll,fp.rollExpo,db)*lim),ka=1-Math.exp(-dt/SPEC.tau.A);
+    drone.thrust.x+=(fx*tf+rx*tr-drone.thrust.x)*ka;drone.thrust.z+=(fz*tf+rz*tr-drone.thrust.z)*ka;
+    drone.cmd.x=drone.cmd.z=drone.ff.x=drone.ff.z=0;drone.hold=null;
+  }else{
+    const p=ex(inp.pitch)*vmax,r=expo(inp.roll,fp.rollExpo,db)*vmax;let tvx=fx*p+rx*r,tvz=fz*p+rz*r;
+    // Sticks centred: it brakes, then holds the spot on GPS and flies back if a gust pushes it off
+    if(Math.abs(inp.pitch)>db||Math.abs(inp.roll)>db)drone.hold=null;
+    else if(!drone.hold){if(Math.hypot(drone.vel.x,drone.vel.z)<.5)drone.hold={x:drone.pos.x,z:drone.pos.z};}
+    else{let hx=(drone.hold.x-drone.pos.x)*.6,hz=(drone.hold.z-drone.pos.z)*.6;const hl=Math.hypot(hx,hz);if(hl>2){hx*=2/hl;hz*=2/hl;}tvx+=hx;tvz+=hz;}
+    // The aircraft has to lean before it accelerates, so acceleration builds over tau/3 instead of jumping: no lurch on small inputs
+    const tau=SPEC.tau[fm];let ax=(tvx-drone.vel.x)/tau,az=(tvz-drone.vel.z)/tau;const al=Math.hypot(ax,az);if(al>fp.accel){ax*=fp.accel/al;az*=fp.accel/al;}
+    const ka=1-Math.exp(-dt/(tau/3));drone.cmd.x+=(ax-drone.cmd.x)*ka;drone.cmd.z+=(az-drone.cmd.z)*ka;
+    const kf=1-Math.exp(-dt/FF_TAU);drone.ff.x+=(-d.x-drone.ff.x)*kf;drone.ff.z+=(-d.z-drone.ff.z)*kf;
+    drone.thrust.x=drone.cmd.x+drone.ff.x;drone.thrust.z=drone.cmd.z+drone.ff.z;
+  }
+  // Thrust can't lean past the mode's tilt limit: past that the wind wins
+  const tl=GRAV*Math.tan(SPEC.tiltLim[fm]*DEG),tm=Math.hypot(drone.thrust.x,drone.thrust.z);if(tm>tl){drone.thrust.x*=tl/tm;drone.thrust.z*=tl/tm;}
+  drone.acc.x=drone.thrust.x+d.x;drone.acc.z=drone.thrust.z+d.z;
   drone.vel.x+=drone.acc.x*dt;drone.vel.z+=drone.acc.z*dt;
   const dvy=(tvy-drone.vel.y)*(1-Math.exp(-dt/.35));drone.vel.y+=dvy;drone.acc.y=dvy/dt;
   const tyr=-ex(inp.yaw)*Math.min(fp.yaw,SPEC.yawMax.S)*DEG;drone.yawRate+=(tyr-drone.yawRate)*(1-Math.exp(-dt/.18));
@@ -986,10 +1051,10 @@ function fpvTiltStep(dt){
 }
 function droneVisual(dt){
   const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
-  const af=drone.acc.x*fx+drone.acc.z*fz,ar=drone.acc.x*rx+drone.acc.z*rz,vf=drone.vel.x*fx+drone.vel.z*fz,vr=drone.vel.x*rx+drone.vel.z*rz;
+  const af=drone.thrust.x*fx+drone.thrust.z*fz,ar=drone.thrust.x*rx+drone.thrust.z*rz;
   const lim=(seats().pilotHuman&&S.mode!=='home'?SPEC.tiltLim[settings.flightMode]:SPEC.tiltLim.N)*DEG;
-  drone.visPitch=damp(drone.visPitch,clamp(-(Math.atan(af/9.81)+vf*.012),-lim,lim),6,dt);
-  drone.visRoll=damp(drone.visRoll,clamp(-(Math.atan(ar/9.81)+vr*.012),-lim,lim),6,dt);
+  drone.visPitch=damp(drone.visPitch,clamp(-Math.atan(af/GRAV),-lim,lim),6,dt);
+  drone.visRoll=damp(drone.visRoll,clamp(-Math.atan(ar/GRAV),-lim,lim),6,dt);
 }
 
 /* ---------- Gimbal ---------- */
@@ -1149,17 +1214,23 @@ function pollInput(dt){
   input.cam.pan=clamp(axisVal(cm&&cm.pan,seatDev.camera)+kb.pan+(vstick.active?vstick.x:0),-1,1);
   input.cam.tilt=clamp(axisVal(cm&&cm.tilt,seatDev.camera)*(settings.camLayout==='fpv'?-1:1)+kb.tilt+(vstick.active?vstick.y:0),-1,1);
   for(const f of ['thr','yaw','pitch','roll','fpvTilt'])input.pil[f]=clamp(axisVal(pm&&pm[f],seatDev.pilot)+kb[f],-1,1);
+  // Gamepads have no dial: the triggers tilt the FPV camera (RT up, LT down) unless Stick setup mapped an axis
+  const pd=seatDev.pilot;if(pd&&pd.kind==='standard'&&!(pm&&pm.fpvTilt))input.pil.fpvTilt=clamp(input.pil.fpvTilt+(pd.buttons[7]||0)-(pd.buttons[6]||0),-1,1);
   padButtons(devs);
 }
 const prevBtn={};
 function padButtons(devs){
-  for(const d of devs){for(const i of [0,1,9]){const k=d.key+':'+i,on=(d.buttons[i]||0)>.5;if(on&&!prevBtn[k])onPadButton(i);prevBtn[k]=on;}}
+  // Standard gamepads (Xbox layout): A go, B back, X gimbal profile, Y flight mode, View swap feeds, Menu pause
+  for(const d of devs){for(const i of (d.kind==='standard'?[0,1,2,3,8,9]:[0,1,9])){const k=d.key+':'+i,on=(d.buttons[i]||0)>.5;if(on&&!prevBtn[k])onPadButton(i);prevBtn[k]=on;}}
 }
 function onPadButton(i){
   if(calib.active)return;
   if(i===0)confirmAction();
   else if(i===9){if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();}
   else if(i===1){if(S.mode==='brief'||S.mode==='results')goHome();}
+  else if(i===2)setGimbalProfile(settings.gimbalProfile+1,true);
+  else if(i===3){const ids=FLIGHT_MODES.map(m=>m.id);setFlightMode(ids[(ids.indexOf(settings.flightMode)+1)%ids.length],true);}
+  else if(i===8){S.swapPref=!S.swap;applyRoleView();}
 }
 
 /* ---------- Stick setup (calibration) ---------- */
@@ -1309,7 +1380,7 @@ if(navigator.usb)navigator.usb.addEventListener('disconnect',e=>{for(const d of 
 /* ---------- Run lifecycle ---------- */
 function resetDroneBehindCar(){
   setCtx();drone.pos.copy(ctx.rel(-30,8,22));drone.vel.set(-Math.sin(car.smYaw)*car.v,0,-Math.cos(car.smYaw)*car.v);
-  drone.yaw=car.smYaw;drone.yawRate=0;drone.visPitch=0;drone.visRoll=0;
+  drone.yaw=car.smYaw;drone.yawRate=0;drone.visPitch=0;drone.visRoll=0;settleFlight();
   placeCameras();aimAngles(0,0,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;gim.panRate=gim.tiltRate=0;resetRel();
 }
 function prepareRun(sh){
@@ -1328,7 +1399,7 @@ function prepareRun(sh){
   carStep(car,.1,shotSpeed(sh,0,0));rawPath(.1,_v);Object.assign(car,save);
   rawPath(0,_w);Vp.copy(_v).sub(_w).multiplyScalar(10);Vprev.copy(Vp);Ap.set(0,0,0);Pprev.copy(P);
   pathPoint(0,P,1);
-  drone.pos.copy(P);drone.vel.copy(Vp);drone.acc.set(0,0,0);drone.visPitch=drone.visRoll=0;drone.yawRate=0;
+  drone.pos.copy(P);drone.vel.copy(Vp);drone.acc.set(0,0,0);drone.visPitch=drone.visRoll=0;drone.yawRate=0;windStep(0);settleFlight();
   const hs=Math.hypot(Vp.x,Vp.z);drone.yaw=hs>3?Math.atan2(-Vp.x,-Vp.z):Math.atan2(-(car.x-P.x),-(car.z-P.z));
   placeCameras();aimAngles(sh.frame.tx,sh.frame.ty,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;gim.panRate=gim.tiltRate=gim.prevW=gim.prevT=0;resetRel();
   placeCameras();placeCarMesh(0);
@@ -1410,7 +1481,7 @@ function stepWorld(dt){
     Vp.lerp(_v.copy(P).sub(Pprev).divideScalar(Math.max(dt,1e-3)),.25);Pprev.copy(P);
     Ap.lerp(_w.copy(Vp).sub(Vprev).divideScalar(Math.max(dt,1e-3)),.15);Vprev.copy(Vp);
   }
-  const yaw0=drone.yaw;
+  const yaw0=drone.yaw;windStep(dt);
   if(pilotHuman)pilotStep(dt,input.pil);else autoStep(dt);
   droneVisual(dt);fpvTiltStep(dt);
   const dyaw=wrapPi(drone.yaw-yaw0);
@@ -1460,7 +1531,7 @@ function hud(){
   el.zone.textContent=showZone?({on:'On the mark',near:'Close',framed:'Off the mark',lost:'Subject lost'})[SC.cam.zone]||'':'';
   const gh=terrainH(drone.pos.x,drone.pos.z),dc=Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z),hs=Math.hypot(drone.vel.x,drone.vel.z);
   if(++hudTick%3===0){
-    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO')+'</span><span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span><span><em>FPV</em> '+sgn(drone.fpvTilt/DEG)+'°</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'');
+    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO')+'</span><span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span><span><em>FPV</em> '+sgn(drone.fpvTilt/DEG)+'°</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'')+(settings.wind.speed>0?'<span><em>WIND</em> '+fmtSpd(Math.hypot(wind.x,wind.z))+' '+compass(settings.wind.dir)+'</span>':'');
     // Pilot's mark readout
     let pt='';
     if(st.pilotHuman&&sh.tolM>0&&(running||S.mode==='count'||S.mode==='brief')){
@@ -1477,7 +1548,7 @@ function hud(){
   else el.count.hidden=true;
   // Warnings
   let w='';
-  if(st.pilotHuman&&S.mode!=='home'){if(dc<8)w='Too close to the car';else if(S.ceiling)w='Altitude limit: 400 ft AGL';else if(drone.pos.y-gh<4)w='Low altitude';}
+  if(st.pilotHuman&&S.mode!=='home'){if(dc<8)w='Too close to the car';else if(S.ceiling)w='Altitude limit: 400 ft AGL';else if(drone.pos.y-gh<4)w='Low altitude';else if(Math.hypot(wind.x,wind.z)>12)w='Strong wind: fly with caution';}
   if(!w&&st.camHuman&&S.panLimited&&S.mode!=='home')w='Gimbal pan limit';
   if(w!==warnText){warnText=w;el.warn.hidden=!w;el.warn.textContent=w;}
   // Slate
@@ -1530,6 +1601,11 @@ function drawMap(){
   g.fillStyle='#f4f1ea';g.fillRect(-cw/2,-cl/2,cw,cl);g.fillStyle='#a8261c';g.fillRect(-cw/2,-cl/2,cw,cl*.25);g.restore();
   // aircraft
   g.save();g.translate(dx,dy);g.rotate(-drone.yaw);g.fillStyle='#e5402c';g.beginPath();const s=7*dpr;g.moveTo(0,-s);g.lineTo(s*.75,s*.7);g.lineTo(0,s*.35);g.lineTo(-s*.75,s*.7);g.closePath();g.fill();g.restore();
+  // wind: arrow points the way the air is moving
+  const ws=Math.hypot(wind.x,wind.z);if(settings.wind.speed>0&&ws>.1){const ax=w-24*dpr,ay=24*dpr,L=13*dpr,ux=wind.x/ws,uz=wind.z/ws;
+    g.strokeStyle=g.fillStyle='#cfe3ff';g.lineWidth=2*dpr;g.beginPath();g.moveTo(ax-ux*L,ay-uz*L);g.lineTo(ax+ux*L,ay+uz*L);g.stroke();
+    g.beginPath();g.moveTo(ax+ux*L,ay+uz*L);g.lineTo(ax+ux*(L-6*dpr)-uz*4*dpr,ay+uz*(L-6*dpr)+ux*4*dpr);g.lineTo(ax+ux*(L-6*dpr)+uz*4*dpr,ay+uz*(L-6*dpr)-ux*4*dpr);g.closePath();g.fill();
+    g.font=(10*dpr)+'px IBM Plex Mono, monospace';g.textAlign='right';g.fillText(fmtSpd(ws),w-6*dpr,ay+L+14*dpr);g.textAlign='left';}
   // scale bar
   const unit=imperial()?{m:30.48*(span>220?5:2),t:(span>220?500:200)+' ft'}:{m:span>220?150:50,t:(span>220?150:50)+' m'};
   g.strokeStyle='#959b99';g.fillStyle='#959b99';g.lineWidth=1*dpr;const bx=8*dpr,by=h-10*dpr;g.beginPath();g.moveTo(bx,by);g.lineTo(bx+unit.m*k,by);g.stroke();
@@ -1945,7 +2021,7 @@ function renderControls(){
   const fn={pan:'Pan',tilt:'Tilt',zoom:'Zoom',thr:'Throttle',yaw:'Yaw',pitch:'Pitch',roll:'Roll',fpvTilt:'FPV tilt (left dial)'},rows=[];
   for(const seat of ['camera','pilot']){const dev=seatDev[seat],m=mapFor(seat,dev);
     for(const f of (seat==='camera'?['pan','tilt']:['thr','yaw','pitch','roll','fpvTilt'])){const b=m&&m[f];
-      rows.push('<tr><td>'+(seat==='camera'?'Camera':'Pilot')+' '+fn[f]+'</td><td>'+(dev?esc(dev.label)+' · axis '+(b?b.axis:'—'):'Keyboard')+'</td><td>'+(dev&&b?'<button class="btn small" type="button" data-inv="'+seat+':'+f+'">Invert</button>':'')+'</td></tr>');}}
+      rows.push('<tr><td>'+(seat==='camera'?'Camera':'Pilot')+' '+fn[f]+'</td><td>'+(dev?esc(dev.label)+' · '+(b?'axis '+b.axis:f==='fpvTilt'&&dev.kind==='standard'?'triggers (RT up, LT down)':'—'):'Keyboard')+'</td><td>'+(dev&&b?'<button class="btn small" type="button" data-inv="'+seat+':'+f+'">Invert</button>':'')+'</td></tr>');}}
   $('#bindTable').innerHTML='<thead><tr><th>Function</th><th>Source</th><th></th></tr></thead><tbody>'+rows.join('')+'</tbody>';
   const nSer=dji.list.filter(d=>d.ok).length+djiu.list.filter(d=>d.ok).length;
   $('#djiState').textContent=({on:'Bridge connected · '+bridge.devices.length+' controller'+(bridge.devices.length===1?'':'s'),connecting:'Looking for the bridge…',lost:'Bridge stopped. Restart it; this page reconnects on its own.',blocked:'This viewer blocks the bridge.',off:''})[bridge.state]+(nSer?' · '+nSer+' RC-N on USB':'');
@@ -1979,9 +2055,12 @@ function renderDjiNotes(){
 const segHTML=(items,cur,attr)=>items.map(it=>'<button type="button" data-'+attr+'="'+it.id+'" aria-pressed="'+(String(it.id)===String(cur))+'" title="'+esc(it.title||it.label)+'">'+esc(it.label)+'</button>').join('');
 const gpItems=()=>settings.gimbalProfiles.map((p,i)=>({id:i,label:(i+1)+' '+p.name,title:p.name}));
 const fmItems=()=>FLIGHT_MODES.map(m=>({id:m.id,label:m.id+' '+m.label.split(' - ')[1].split(' ')[0],title:m.label}));
+const WIND_PRESETS=[{v:0,label:'Calm'},{v:4,label:'Light'},{v:8,label:'Mod'},{v:12,label:'Strong'}];
 function renderQuick(){
   const g=segHTML(gpItems(),settings.gimbalProfile,'gp'),f=segHTML(FLIGHT_MODES.map(m=>({id:m.id,label:m.id,title:m.label})),settings.flightMode,'fm');
   if($('#liveGp')._h!==g){$('#liveGp').innerHTML=g;$('#liveGp')._h=g;}if($('#liveFm')._h!==f){$('#liveFm').innerHTML=f;$('#liveFm')._h=f;}
+  const w=segHTML(WIND_PRESETS.map(p=>({id:p.v,label:p.label,title:p.v?fmtSpd(p.v)+' from '+compass(settings.wind.dir):'No wind'})),settings.wind.speed,'wp');
+  if($('#liveWind')._h!==w){$('#liveWind').innerHTML=w;$('#liveWind')._h=w;}
 }
 function renderSettings(){
   const s=settings,gp=gimbalProf(),fp=flightProf(),spd=v=>imperial()?Math.round(v*2.23694)+' mph':Math.round(v*3.6)+' km/h';
@@ -1992,10 +2071,14 @@ function renderSettings(){
     $('#'+id).value=gp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(gp[k]);}
   for(const [id,k,f] of [['fpVmax','vmax',spd],['fpYaw','yaw',v=>v+'°/s'],['fpUp','up',v=>(+v).toFixed(1)+' m/s'],['fpDown','down',v=>(+v).toFixed(1)+' m/s'],['fpAccel','accel',v=>(+v).toFixed(1)],['fpExpo','expo',v=>(+v).toFixed(2)],['fpRollExpo','rollExpo',v=>(+v).toFixed(2)]]){
     $('#'+id).value=fp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(fp[k]);}
+  $('#wSpeed').value=s.wind.speed;$('#vWSpeed').textContent=s.wind.speed?spd(s.wind.speed)+' ('+(+s.wind.speed).toFixed(1)+' m/s)':'Calm';$('#wDir').value=s.wind.dir;$('#vWDir').textContent=compass(s.wind.dir)+' ('+s.wind.dir+'\u00b0)';
+  $('#wGust').innerHTML=segHTML([{id:'off',label:'Off'},{id:'light',label:'Light'},{id:'strong',label:'Strong'}],s.wind.gust,'wg');
   $('#setScreen').value=s.screen;$('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
   app.classList.toggle('noguides',!s.guides);app.classList.toggle('noring',!s.ring);renderQuick();
 }
 function bindSetting(id,key,parse){$(id).addEventListener('input',e=>{settings[key]=parse(e.target);saveSettings();renderSettings();});}
+$('#wSpeed').addEventListener('input',e=>{settings.wind.speed=+e.target.value;saveSettings();renderSettings();});
+$('#wDir').addEventListener('input',e=>{settings.wind.dir=+e.target.value;saveSettings();renderSettings();});
 bindSetting('#setScreen','screen',t=>t.value);$('#setScreen').addEventListener('input',applyRoleView);
 bindSetting('#setGimbalMode','gimbalMode',t=>t.value);bindSetting('#setCamLayout','camLayout',t=>t.value);bindSetting('#setInvert','invertTilt',t=>t.checked);
 bindSetting('#setUnits','units',t=>t.value);bindSetting('#setGuides','guides',t=>t.checked);bindSetting('#setRing','ring',t=>t.checked);bindSetting('#setDeadband','deadband',t=>+t.value);
@@ -2006,6 +2089,9 @@ for(const [id,k] of [['fpVmax','vmax'],['fpYaw','yaw'],['fpUp','up'],['fpDown','
 $('#gpName').addEventListener('input',e=>{gimbalProf().name=e.target.value.slice(0,24)||'Profile '+(settings.gimbalProfile+1);saveSettings();renderSettings();});
 function setGimbalProfile(i,announce){settings.gimbalProfile=((i%3)+3)%3;saveSettings();renderSettings();if(announce)toast('Gimbal profile '+(settings.gimbalProfile+1)+': '+gimbalProf().name);}
 function setFlightMode(m,announce){settings.flightMode=m;saveSettings();renderSettings();if(announce)toast('Flight mode '+m+': '+FLIGHT_MODES.find(x=>x.id===m).label.split(' - ')[1]);}
+function setWind(v,announce){settings.wind.speed=v;saveSettings();renderSettings();if(announce)toast(v?'Wind '+fmtSpd(v)+' from '+compass(settings.wind.dir)+(settings.wind.gust!=='off'?', '+settings.wind.gust+' gusts':''):'Wind calm');}
+document.addEventListener('click',e=>{const w=e.target.closest('[data-wp]'),wg=e.target.closest('[data-wg]');
+  if(w)setWind(+w.dataset.wp,true);if(wg){settings.wind.gust=wg.dataset.wg;saveSettings();renderSettings();}});
 document.addEventListener('click',e=>{const g=e.target.closest('[data-gp]'),f=e.target.closest('[data-fm]');
   if(g)setGimbalProfile(+g.dataset.gp,!g.closest('#gpTabs'));if(f)setFlightMode(f.dataset.fm,!f.closest('#fmTabs'));});
 $('#setReset').onclick=()=>{Object.assign(settings,clone(DEFAULTS));saveSettings();renderSettings();toast('Settings reset.');};
