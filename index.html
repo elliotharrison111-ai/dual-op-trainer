@@ -1,0 +1,2060 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style>
+<title>Dual-Op Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a field monitor. Letterboxed 16:9 camera feed on the left, an equipment rack (pilot FPV, map, live take stats) on the right. One dark theme on purpose: it is a monitor. */
+:root{
+  --ink:#0c0e0f;--panel:#15181a;--panel-2:#1d2124;--line:#2a3034;--line-2:#3b4348;
+  --fg:#ebe7dd;--muted:#959b99;--tally:#e5402c;--tally-ink:#fff6f2;
+  --good:#62d08b;--warn:#f0b13c;--bad:#ff5b4b;--osd:#f4f1ea;
+  --osd-shadow:0 0 3px rgba(0,0,0,.95),0 0 1px #000;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-data:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --side:clamp(230px,23vw,340px);--top-h:48px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{height:100%}
+body{height:100%;margin:0;background:var(--ink);color:var(--fg);font:15px/1.45 var(--font-body);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+#app{position:relative;height:100%;display:grid;grid-template-columns:minmax(0,1fr) var(--side);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"top top" "main side";overflow:hidden;background:var(--ink)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+#top{grid-area:top;position:relative;z-index:9;display:flex;align-items:center;gap:14px;padding-block:7px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font:700 19px/1 var(--font-display);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+.brand .soft{color:var(--muted);font-weight:500}
+.tally{width:10px;height:10px;border-radius:50%;background:var(--tally);box-shadow:0 0 8px var(--tally);flex:none}
+.slate{flex:1;min-width:0;font:500 12.5px/1.2 var(--font-data);color:var(--muted);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topnav{display:flex;gap:6px}
+.btn{appearance:none;border:1px solid var(--line-2);background:var(--panel-2);padding:8px 13px;border-radius:5px;font:600 14px/1 var(--font-display);letter-spacing:.07em;text-transform:uppercase;cursor:pointer;white-space:nowrap;color:var(--fg)}
+.btn:hover{border-color:#5d676e}
+.btn:focus-visible,.shot:focus-visible,.role:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,.swap:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.btn.primary{background:var(--tally);border-color:var(--tally);color:var(--tally-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.small{padding:6px 9px;font-size:12.5px}
+.btn.rec-on{background:var(--tally);border-color:var(--tally);color:var(--tally-ink)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+#mainSlot{grid-area:main;position:relative;z-index:1;min-width:0;min-height:0;touch-action:none}
+#frame,#fpvHud{position:absolute;overflow:hidden;pointer-events:none;box-shadow:0 0 0 1px #000}
+#fpvHud{display:none}
+#app.split #fpvHud{display:block}
+.g{position:absolute;background:rgba(255,255,255,.26)}
+.gv{top:0;bottom:0;width:1px}.gh{left:0;right:0;height:1px}
+.safe{position:absolute;inset:5%;border:1px solid rgba(255,255,255,.13)}
+.cross{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%)}
+.cross::before,.cross::after{content:"";position:absolute;background:rgba(255,255,255,.55)}
+.cross::before{left:8px;top:0;width:2px;height:18px}.cross::after{top:8px;left:0;height:2px;width:18px}
+#app.noguides .g,#app.noguides .safe{display:none}
+#app.noring #ring{display:none}
+#app.fpvmain #frame .g,#app.fpvmain #frame .safe,#app.fpvmain #ring,#app.fpvmain #zone,#app.fpvmain #panGauge,#app.fpvmain #tiltGauge{display:none}
+#ring{position:absolute;border-radius:50%;border:2px dashed rgba(255,255,255,.8);transform:translate(-50%,-50%)}
+#ring.on{border-style:solid;border-color:var(--good)}
+.osd{position:absolute;display:flex;gap:10px;font:500 12px/1 var(--font-data);color:var(--osd);text-shadow:var(--osd-shadow);letter-spacing:.03em;white-space:nowrap}
+#osdTL{left:10px;top:10px}#osdTR{right:10px;top:10px}
+.rec.live{color:var(--tally)}
+.rec.live::before{content:"\25CF  "}
+.gauge-h{position:absolute;left:50%;top:9px;width:min(36%,260px);height:13px;transform:translateX(-50%);border:1px solid rgba(255,255,255,.45);border-radius:2px;background:rgba(0,0,0,.25)}
+.gauge-h::after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:rgba(255,255,255,.7)}
+.gauge-h i{position:absolute;top:1px;bottom:1px;width:4px;margin-left:-2px;background:var(--osd);border-radius:1px}
+.gauge-h b{position:absolute;top:16px;left:50%;transform:translateX(-50%);font:500 11px/1.2 var(--font-data);color:var(--osd);text-shadow:var(--osd-shadow);white-space:nowrap}
+.gauge-v{position:absolute;right:12px;top:50%;height:min(50%,220px);width:12px;transform:translateY(-50%);border:1px solid rgba(255,255,255,.45);border-radius:2px;background:rgba(0,0,0,.25)}
+.gauge-v::after{content:"";position:absolute;left:-4px;right:-4px;top:var(--zero,25%);height:1px;background:rgba(255,255,255,.7)}
+.gauge-v i{position:absolute;left:1px;right:1px;height:4px;margin-top:-2px;background:var(--osd);border-radius:1px}
+.gauge-v b{position:absolute;right:17px;font:500 11px/1 var(--font-data);color:var(--osd);text-shadow:var(--osd-shadow);transform:translateY(-50%);white-space:nowrap}
+.warn{position:absolute;left:50%;top:46px;transform:translateX(-50%);background:var(--bad);color:#fff;font:600 14px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border-radius:3px;white-space:nowrap}
+.zone{position:absolute;left:10px;bottom:36px;font:600 13px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;padding:5px 8px;border-radius:3px;background:rgba(0,0,0,.55);color:var(--osd)}
+.zone.on{background:var(--good);color:#06210f}.zone.near{background:var(--warn);color:#2a1a00}.zone.lost{background:var(--bad);color:#fff}
+.zone:empty{display:none}
+.pilotinfo{position:absolute;left:50%;bottom:36px;transform:translateX(-50%);font:500 12px/1 var(--font-data);color:var(--osd);text-shadow:var(--osd-shadow);background:rgba(0,0,0,.4);padding:5px 8px;border-radius:3px;white-space:nowrap}
+.pilotinfo:empty{display:none}
+.pilotinfo.good{color:var(--good)}
+.tele{position:absolute;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;gap:4px 14px;padding:18px 10px 8px;font:500 11.5px/1 var(--font-data);color:var(--osd);text-shadow:var(--osd-shadow);background:linear-gradient(transparent,rgba(0,0,0,.5))}
+.tele em{font-style:normal;color:#c9c6bd}
+#progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.12)}
+#progress i{display:block;height:100%;width:0;background:var(--tally)}
+.count{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 clamp(46px,11vw,140px)/1 var(--font-display);color:var(--osd);text-shadow:0 2px 24px rgba(0,0,0,.65);letter-spacing:.04em;text-transform:uppercase}
+.recmove{position:absolute;right:10px;top:28px;font:600 13px/1 var(--font-display);letter-spacing:.08em;color:#fff;background:var(--tally);padding:5px 8px;border-radius:3px}
+.fpvlab{position:absolute;left:8px;top:8px;font:500 10.5px/1 var(--font-data);letter-spacing:.07em;background:rgba(0,0,0,.6);color:var(--osd);padding:3px 5px;border-radius:2px}
+#vstick{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border:2px solid rgba(255,255,255,.5);border-radius:50%;pointer-events:none;z-index:3}
+#vstick i{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px;border-radius:50%;background:rgba(255,255,255,.78)}
+#side{grid-area:side;position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;padding:8px;min-height:0;overflow:auto;border-left:1px solid var(--line)}
+.feed{position:relative;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+#fpvSlot{aspect-ratio:16/9;flex:none}
+#app.split #fpvSlot{display:none}
+#mapSlot{flex:1 1 0;min-height:130px;background:#0f1517}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block}
+.feed-label{position:absolute;left:6px;top:5px;font:500 10.5px/1 var(--font-data);letter-spacing:.07em;background:rgba(0,0,0,.6);color:var(--osd);padding:3px 5px;border-radius:2px;pointer-events:none}
+.swap{position:absolute;right:5px;top:4px;appearance:none;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);color:var(--osd);font:500 10.5px/1 var(--font-data);letter-spacing:.06em;padding:3px 6px;border-radius:2px;cursor:pointer}
+.live{flex:none;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:9px}
+.live h4{font:600 12px/1 var(--font-display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.lrow{display:flex;justify-content:space-between;gap:10px;font:500 12.5px/1.2 var(--font-data)}
+.lrow span{color:var(--muted)}
+.lrow b{font-weight:500;font-variant-numeric:tabular-nums}
+.sticks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stickbox{display:flex;flex-direction:column;gap:4px;font:500 10px/1 var(--font-data);color:var(--muted);letter-spacing:.07em;min-width:0}
+.stickbox canvas{width:100%;height:auto;aspect-ratio:2/1;background:#101416;border:1px solid var(--line);border-radius:3px}
+.tools{display:flex;flex-direction:column;gap:9px;border-top:1px solid var(--line);padding-top:9px}
+.field{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted)}
+.field>span{display:flex;justify-content:space-between;gap:8px}
+.field b{color:var(--fg);font:500 12.5px var(--font-data)}
+select,input[type=text],input[type=number],textarea{background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;padding:7px 8px;color:var(--fg);max-width:100%}
+input[type=range]{accent-color:var(--tally);width:100%}
+input[type=checkbox]{accent-color:var(--tally);width:16px;height:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.overlay{position:absolute;left:0;right:0;bottom:0;top:var(--top-h);z-index:5;overflow:auto;padding-block:22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#home{background:linear-gradient(90deg,rgba(12,14,15,.96) 0%,rgba(12,14,15,.88) 48%,rgba(12,14,15,.6) 100%)}
+.dim{background:rgba(10,12,13,.72)}
+.sheet{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:22px;max-width:680px;margin:2vh auto 0;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3,h4{font-family:var(--font-display);text-wrap:balance;margin:0;font-weight:700}
+h1{font-size:clamp(36px,5.2vw,60px);letter-spacing:.02em;text-transform:uppercase;line-height:.92}
+h2{font-size:clamp(28px,3.6vw,40px);letter-spacing:.02em;text-transform:uppercase;line-height:1}
+h3{font-size:24px;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.kicker{font:500 12px/1 var(--font-data);letter-spacing:.12em;text-transform:uppercase;color:var(--tally)}
+.lede{max-width:62ch;color:#cfcbc2;margin:0;font-size:16px}
+.muted{color:var(--muted)}
+p{margin:0}
+.homehead{display:flex;flex-direction:column;gap:14px}
+.roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:820px}
+.role{appearance:none;text-align:left;border:1px solid var(--line-2);background:var(--panel);border-radius:6px;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:4px;color:var(--fg)}
+.role b{font:700 20px/1 var(--font-display);letter-spacing:.05em;text-transform:uppercase}
+.role small{font-size:13px;color:var(--muted);line-height:1.3}
+.role[aria-pressed="true"]{border-color:var(--tally);box-shadow:inset 0 -3px 0 var(--tally)}
+.padstatus{font:500 12.5px/1.5 var(--font-data);color:var(--muted)}
+.padstatus b{color:var(--fg);font-weight:500}
+.sect{display:flex;flex-direction:column;gap:10px}
+.secthead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px}
+.secthead h3{font-size:20px}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px}
+.shot{appearance:none;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:8px;color:var(--fg);min-width:0}
+.shot:hover{border-color:var(--tally)}
+.shot-top{display:flex;justify-content:space-between;font:500 11px/1 var(--font-data);letter-spacing:.1em;color:var(--muted)}
+.pips{letter-spacing:2px;color:var(--tally)}
+.pips s{text-decoration:none;color:var(--line-2)}
+.shot h4{font-size:23px;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.shot p{font-size:13.5px;color:#c4c0b7;line-height:1.4}
+.specs{display:flex;flex-wrap:wrap;gap:4px 12px;font:500 11.5px/1.3 var(--font-data);color:var(--muted);margin-top:auto}
+.specs b{color:var(--fg);font-weight:500}
+.best{font:500 11.5px/1 var(--font-data);color:var(--muted);border-top:1px solid var(--line);padding-top:8px;display:flex;justify-content:space-between;gap:8px}
+.best b{color:var(--fg);font-weight:500}
+.shot.sandbox{border-style:dashed}
+.mini{display:flex;gap:6px;flex-wrap:wrap}
+.slatebig{font:500 13px/1 var(--font-data);letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.cols h4{font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+#bDiagram{width:100%;height:auto;aspect-ratio:16/9;border:1px solid var(--line);border-radius:4px;background:#0f1214}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.hint{font:500 12px/1.4 var(--font-data);color:var(--muted)}
+.gradebox{display:flex;align-items:center;gap:18px}
+.grade{font:700 88px/0.85 var(--font-display);color:var(--fg);min-width:70px}
+.score{font:700 44px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.note{font:500 17px/1.3 var(--font-body);color:#d6d2c9}
+.rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.stat span{font:500 11px/1 var(--font-data);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat b{font:700 26px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.stat.seat{grid-column:1/-1;background:transparent;border:0;padding:6px 0 0;font:600 14px/1 var(--font-display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+#rTrack{width:100%;height:auto;border-radius:3px;background:#101416}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font:500 11.5px/1 var(--font-data);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.drawer{position:absolute;top:var(--top-h);right:0;bottom:0;width:min(560px,100%);z-index:8;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:18px max(18px,env(safe-area-inset-right,0px)) 28px 18px;display:flex;flex-direction:column;gap:18px;box-shadow:-12px 0 40px rgba(0,0,0,.4)}
+.drawer header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.drawer h3{font-size:16px;letter-spacing:.1em;color:var(--muted)}
+.drawer section{display:flex;flex-direction:column;gap:10px}
+.drawer p,.drawer li{font-size:14px;color:#cfcbc2;line-height:1.5}
+.drawer ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.devs{display:flex;flex-direction:column;gap:8px}
+.dev{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:9px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.dev header{font:500 12px/1.3 var(--font-data);color:var(--fg);overflow-wrap:anywhere}
+.axes{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:5px}
+.ax{position:relative;height:18px;background:#0f1214;border:1px solid var(--line);border-radius:2px;font:500 10px/16px var(--font-data);color:var(--muted);padding-left:4px;overflow:hidden}
+.ax i{position:absolute;top:0;bottom:0;left:50%;background:rgba(229,64,44,.55)}
+.ax span{position:relative}
+.tbl{width:100%;border-collapse:collapse;font:500 12.5px/1.3 var(--font-data)}
+.tbl th{text-align:left;font-weight:500;color:var(--muted);padding:6px 6px 6px 0;border-bottom:1px solid var(--line)}
+.tbl td{padding:6px 6px 6px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+.tblwrap{overflow-x:auto}
+.calib{background:var(--panel-2);border:1px solid var(--tally);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.calib b{font:700 22px/1.1 var(--font-display);letter-spacing:.03em;text-transform:uppercase}
+.meter{height:6px;background:#0f1214;border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--tally)}
+.kbd{display:grid;grid-template-columns:max-content 1fr;gap:5px 12px;font-size:13.5px;color:#cfcbc2}
+.kbd dt{font:500 12px/1.6 var(--font-data);color:var(--fg)}
+.kbd dd{margin:0}
+.callout{border:1px solid var(--line-2);border-radius:6px;padding:12px;background:var(--panel-2);display:flex;flex-direction:column;gap:8px}
+.callout.bad{border-color:var(--bad)}
+.tag{display:inline-block;font:500 10.5px/1 var(--font-data);letter-spacing:.06em;padding:3px 5px;border-radius:3px;border:1px solid var(--line-2);color:var(--muted)}
+.tag.ok{color:var(--good);border-color:rgba(98,208,139,.5)}
+.tag.no{color:var(--bad);border-color:rgba(255,91,75,.5)}
+textarea{width:100%;min-height:90px;font:500 12px/1.4 var(--font-data);resize:vertical}
+.card.wide{max-width:1000px}
+#mmCanvas{width:100%;height:auto;max-height:52vh;object-fit:contain;background:#0f1214;border:1px solid var(--line);border-radius:4px;cursor:crosshair}
+.locs{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px}
+.loc{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.loc[aria-current="true"]{border-color:var(--tally);box-shadow:inset 0 -3px 0 var(--tally)}
+.loc h4{font-size:21px;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.loc p{font-size:13px;color:#c4c0b7;line-height:1.35}
+.loc .mini{margin-top:auto}
+.seg{display:flex;gap:4px;min-width:0}
+.seg button{flex:1;min-width:0;appearance:none;border:1px solid var(--line-2);background:var(--panel-2);color:var(--fg);border-radius:4px;padding:7px 6px;font:600 13px/1.1 var(--font-display);letter-spacing:.05em;text-transform:uppercase;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg button[aria-pressed="true"]{border-color:var(--tally);box-shadow:inset 0 -2px 0 var(--tally)}
+.seg button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.seg.small button{padding:5px 4px;font-size:12px}
+.quick{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 8px;align-items:center;font:500 10.5px/1 var(--font-data);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--fg)}
+.toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:20;background:var(--fg);color:var(--ink);font:600 14px/1.2 var(--font-body);padding:10px 14px;border-radius:5px;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:calc(100% - 32px)}
+.fatal{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--ink);text-align:center}
+@media (max-width:820px),(max-aspect-ratio:1/1){
+  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"top" "main" "side"}
+  #mainSlot{aspect-ratio:16/9}
+  #side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;align-content:start;border-left:0;border-top:1px solid var(--line)}
+  #fpvSlot,#mapSlot{aspect-ratio:auto;height:calc((100vw - 24px) * .28125);min-height:0}
+  #app.split #mapSlot{height:calc((100vw - 16px) * .5625)}
+  #app.split #mapSlot{grid-column:1/-1}
+  #live{grid-column:1/-1}
+  .roles{grid-template-columns:1fr}
+  .cols{grid-template-columns:1fr}
+  .brand .soft,.topnav .icon{display:none}
+  .topnav .btn{padding:7px 9px;font-size:13px}
+  .slate{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head><body>
+<div id="app">
+  <canvas id="gl" aria-label="Simulator view"></canvas>
+  <header id="top">
+    <div class="brand"><span class="tally" aria-hidden="true"></span>Dual-Op <span class="soft">Trainer</span></div>
+    <div id="slate" class="slate">STANDBY</div>
+    <nav class="topnav">
+      <button class="btn ghost" id="btnShots" type="button">Shots</button>
+      <button class="btn ghost" id="btnControls" type="button">Controls</button>
+      <button class="btn ghost" id="btnSettings" type="button">Settings</button>
+      <button class="btn ghost icon" id="btnFull" type="button" title="Full screen" aria-label="Full screen">&#x2922;</button>
+    </nav>
+  </header>
+
+  <main id="mainSlot">
+    <div id="frame">
+      <div class="g gv" style="left:33.333%"></div><div class="g gv" style="left:66.667%"></div>
+      <div class="g gh" style="top:33.333%"></div><div class="g gh" style="top:66.667%"></div>
+      <div class="safe"></div>
+      <div class="cross"></div>
+      <div id="ring"></div>
+      <div id="osdTL" class="osd"><span id="rec" class="rec">STBY</span><span id="tc">00:00:00:00</span></div>
+      <div id="osdTR" class="osd"><span id="lensTag">35mm</span><span>8K &middot; 24p</span></div>
+      <div id="panGauge" class="gauge-h" title="Gimbal pan, relative to the aircraft nose"><i></i><b></b></div>
+      <div id="tiltGauge" class="gauge-v" title="Gimbal tilt"><i></i><b></b></div>
+      <div id="warn" class="warn" hidden></div>
+      <div id="zone" class="zone"></div>
+      <div id="pilotInfo" class="pilotinfo"></div>
+      <div id="tele" class="tele"></div>
+      <div id="progress"><i></i></div>
+      <div id="recMove" class="recmove" hidden>&#9679; RECORDING MOVE <span id="recT">0.0</span>s</div>
+      <div id="count" class="count" hidden></div>
+    </div>
+    <div id="fpvHud"><span class="fpvlab">FPV &middot; PILOT</span><div id="pilotInfo2" class="pilotinfo"></div></div>
+    <div id="vstick" hidden><i></i></div>
+  </main>
+
+  <aside id="side">
+    <div class="feed" id="fpvSlot"><span class="feed-label" id="fpvLabel">FPV &middot; PILOT</span><button class="swap" id="btnSwap" type="button" title="Swap feeds (V)">SWAP</button></div>
+    <div class="feed" id="mapSlot"><canvas id="map"></canvas><span class="feed-label">MAP &middot; N&uarr;</span></div>
+    <div id="live" class="live">
+      <h4 id="liveTitle">Live take</h4>
+      <div class="quick"><span>Gimbal</span><div class="seg small" id="liveGp"></div><span>Flight</span><div class="seg small" id="liveFm"></div></div>
+      <div id="liveRows"></div>
+      <div class="sticks">
+        <div class="stickbox"><span id="stCamLab">CAMERA</span><canvas id="stCam" width="160" height="80"></canvas></div>
+        <div class="stickbox"><span id="stPilLab">PILOT</span><canvas id="stPil" width="160" height="80"></canvas></div>
+      </div>
+      <div id="sandTools" class="tools" hidden>
+        <label class="field" for="carSpeed"><span>Car speed <b id="carSpeedVal"></b></span><input type="range" id="carSpeed" min="0" max="25" step="0.5" value="16"></label>
+        <label class="field" for="sbLens"><span>Lens</span><select id="sbLens"></select></label>
+        <div class="row"><button class="btn small" id="btnCarStop" type="button">Stop car</button><button class="btn small" id="btnRec" type="button">Record move</button></div>
+        <p class="hint" id="recHint">Fly a move with the car rolling, then save it as a shot for your camera op.</p>
+      </div>
+    </div>
+  </aside>
+
+  <section id="home" class="overlay" aria-label="Shot list">
+    <div class="sheet">
+      <div class="homehead">
+        <span class="kicker">Inspire 3 &middot; X9 &middot; dual-operator car work</span>
+        <h1>Dual-Op<br>Trainer</h1>
+        <p class="lede">Pick a seat, pick a shot, and run takes until it's a print. The camera op is graded on framing and smoothness, the pilot on holding the line without crowding the car.</p>
+        <div class="roles" role="group" aria-label="Seat">
+          <button class="role" type="button" data-role="camera"><b>Camera Op</b><small>The autopilot flies the move. You run gimbal and lens.</small></button>
+          <button class="role" type="button" data-role="pilot"><b>Pilot</b><small>You fly the line. An AI op holds the frame.</small></button>
+          <button class="role" type="button" data-role="dual"><b>Dual</b><small>Two controllers, two people, one shot.</small></button>
+        </div>
+        <div id="padStatus" class="padstatus"></div>
+      </div>
+      <div class="sect">
+        <div class="secthead"><h3>Location</h3>
+          <div class="mini"><button class="btn small" id="btnMakeMap" type="button">Make a map</button><button class="btn small" id="btnLoadMap" type="button">Load map file</button><input type="file" id="mapFile" accept=".json,application/json" hidden></div>
+        </div>
+        <div id="locGrid" class="locs"></div>
+      </div>
+      <div class="sect">
+        <div class="secthead"><h3>Shot list</h3><span class="hint">Ordered easiest to hardest</span></div>
+        <div id="shotGrid" class="shots"></div>
+      </div>
+      <div class="sect">
+        <div class="secthead"><h3>Your shots</h3>
+          <div class="mini"><button class="btn small" id="btnExportAll" type="button">Copy shot pack</button><button class="btn small" id="btnImport" type="button">Import shot pack</button></div>
+        </div>
+        <div id="myGrid" class="shots"></div>
+        <div id="exportBox" class="callout" hidden>
+          <label class="field" for="exportText"><span>Shot pack code. Send this to a trainee; they paste it into Import shot pack.</span><textarea id="exportText" readonly spellcheck="false"></textarea></label>
+          <div class="actions"><button class="btn small" id="btnExportClose" type="button">Done</button></div>
+        </div>
+        <div id="importBox" class="callout" hidden>
+          <label class="field" for="importText"><span>Paste a shot pack code</span><textarea id="importText" spellcheck="false" placeholder="DOT1.…"></textarea></label>
+          <div class="actions"><button class="btn primary small" id="btnImportGo" type="button">Add shots</button><button class="btn small" id="btnImportCancel" type="button">Cancel</button></div>
+        </div>
+      </div>
+      <p class="hint">Not affiliated with DJI. Flight and gimbal behaviour is a training approximation, tuned to published Inspire 3 figures where they exist.</p>
+    </div>
+  </section>
+
+  <section id="brief" class="overlay dim" hidden aria-label="Shot brief">
+    <div class="card">
+      <div class="slatebig" id="bSlate"></div>
+      <h2 id="bName"></h2>
+      <p class="lede" id="bBrief"></p>
+      <div class="cols">
+        <div><h4>Your seat</h4><p id="bRole" class="muted"></p></div>
+        <div><h4>Frame it like this</h4><canvas id="bDiagram" width="320" height="180"></canvas></div>
+      </div>
+      <div class="cols">
+        <label class="field" for="bLens"><span>Lens</span><select id="bLens"></select></label>
+        <div id="bSeats" class="field"></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="bStart" type="button">Roll camera</button><button class="btn" id="bBack" type="button">Back to shots</button><button class="btn" id="bDelete" type="button" hidden>Delete shot</button></div>
+      <p class="hint">Space, Enter or the A button rolls. Esc or Start cuts.</p>
+    </div>
+  </section>
+
+  <section id="results" class="overlay dim" hidden aria-label="Take results">
+    <div class="card">
+      <div class="slatebig" id="rSlate"></div>
+      <div class="gradebox"><div class="grade" id="rGrade"></div><div><div class="score" id="rScore"></div><div class="note" id="rNote"></div></div></div>
+      <div id="rRows" class="rows"></div>
+      <canvas id="rTrack" width="640" height="56"></canvas>
+      <div class="legend"><span><i style="background:var(--good)"></i>On the mark</span><span><i style="background:var(--warn)"></i>Close</span><span><i style="background:#57605f"></i>In frame / off line</span><span><i style="background:var(--bad)"></i>Lost / crash</span></div>
+      <div class="actions"><button class="btn primary" id="rRetry" type="button">Go again</button><button class="btn" id="rNext" type="button">Next shot</button><button class="btn" id="rCopy" type="button">Copy scorecard</button><button class="btn" id="rShots" type="button">Shot list</button></div>
+      <textarea id="rText" readonly hidden></textarea>
+    </div>
+  </section>
+
+  <section id="pause" class="overlay dim" hidden aria-label="Paused">
+    <div class="card">
+      <h2>Cut</h2>
+      <div class="actions"><button class="btn primary" id="pResume" type="button">Resume</button><button class="btn" id="pRestart" type="button">Restart take</button><button class="btn" id="pQuit" type="button">Shot list</button></div>
+    </div>
+  </section>
+
+  <section id="saveShot" class="overlay dim" hidden aria-label="Save shot">
+    <div class="card">
+      <span class="kicker">New shot</span>
+      <h2>Save this move</h2>
+      <p class="muted" id="sSummary"></p>
+      <label class="field" for="sName"><span>Shot name</span><input type="text" id="sName" maxlength="40"></label>
+      <label class="field" for="sBrief"><span>Note for the operator (optional)</span><input type="text" id="sBrief" maxlength="140"></label>
+      <div class="cols">
+        <label class="field" for="sRef"><span>Path follows</span><select id="sRef"><option value="car">The car (relative move)</option><option value="world">The ground (fixed line)</option></select></label>
+        <label class="field" for="sLens"><span>Lens called for</span><select id="sLens"></select></label>
+      </div>
+      <div class="cols">
+        <label class="field" for="sFrame"><span>Framing</span><select id="sFrame"></select></label>
+        <label class="field" for="sTol"><span>Tolerance</span><select id="sTol"><option value="0.11">Tight</option><option value="0.15" selected>Standard</option><option value="0.2">Loose</option></select></label>
+      </div>
+      <div class="actions"><button class="btn primary" id="sSave" type="button">Save shot</button><button class="btn" id="sDiscard" type="button">Discard</button></div>
+    </div>
+  </section>
+
+  <section id="mapMaker" class="overlay dim" hidden aria-label="Make a map">
+    <div class="card wide">
+      <span class="kicker">New location</span>
+      <h2>Make a map</h2>
+      <p class="muted">Real elevation from USGS 3DEP, aerial photos from the USGS National Map and road lines from the US Census. US locations only. Needs this trainer opened from the RC bridge or the standalone file, not the claude.ai link.</p>
+      <div class="cols">
+        <label class="field" for="mmName"><span>Name</span><input id="mmName" type="text" maxlength="40"></label>
+        <label class="field" for="mmWhere"><span>Centre: lat, lon (or paste a Google Maps link)</span><input id="mmWhere" type="text" spellcheck="false"></label>
+      </div>
+      <div class="cols">
+        <label class="field" for="mmW"><span>East-west size, km</span><input id="mmW" type="number" min="1" max="14" step="0.5"></label>
+        <label class="field" for="mmH"><span>North-south size, km</span><input id="mmH" type="number" min="1" max="14" step="0.5"></label>
+      </div>
+      <div class="field"><span>Car route</span><div class="seg" id="mmSrc"><button type="button" data-src="name">Road by name</button><button type="button" data-src="file">GPX, KML or GeoJSON</button><button type="button" data-src="draw">Draw on the photo</button></div></div>
+      <label class="field" for="mmRoad" id="mmRoadRow"><span>Road name as the US Census lists it (e.g. Lone Mountain Trl, Gallatin Rd)</span><input id="mmRoad" type="text"></label>
+      <input type="file" id="mmRouteFile" accept=".gpx,.kml,.geojson,.json" hidden>
+      <canvas id="mmCanvas" width="960" height="480"></canvas>
+      <div class="actions">
+        <button class="btn" id="mmFetch" type="button">Load terrain and photo</button>
+        <button class="btn primary" id="mmBuild" type="button" disabled>Build map</button>
+        <button class="btn small" id="mmUndo" type="button">Undo point</button>
+        <button class="btn small" id="mmClear" type="button">Clear route</button>
+        <label class="row" for="mmClosed"><input type="checkbox" id="mmClosed"> Route is a loop</label>
+        <button class="btn small" id="mmCancel" type="button">Cancel</button>
+      </div>
+      <p class="hint" id="mmStatus" role="status"></p>
+    </div>
+  </section>
+
+  <section id="controls" class="drawer" hidden aria-label="Controls">
+    <header><h2>Controls</h2><button class="btn small" data-close type="button">Close</button></header>
+    <section>
+      <h3>Connected controllers</h3>
+      <div id="devList" class="devs"></div>
+      <div class="row"><button class="btn small primary" id="btnDjiUsb" type="button">Connect DJI controller (USB)</button><button class="btn small" id="btnBridge" type="button">Connect RC bridge</button><button class="btn small" id="btnDji" type="button">Connect RC-N serial</button><span id="djiState" class="hint"></span></div>
+    </section>
+    <section>
+      <h3>Seats</h3>
+      <div class="cols">
+        <label class="field" for="seatPilot"><span>Pilot uses</span><select id="seatPilot"></select></label>
+        <label class="field" for="seatCam"><span>Camera op uses</span><select id="seatCam"></select></label>
+      </div>
+      <p class="hint">In the Dual seat with one controller, the pilot gets it and the camera op uses keyboard and mouse.</p>
+    </section>
+    <section>
+      <h3>Stick setup</h3>
+      <p>Map each stick by moving it. Works for gamepads, RC transmitters in joystick mode and DJI controllers.</p>
+      <div class="row"><button class="btn small" id="calCam" type="button">Set up camera sticks</button><button class="btn small" id="calPil" type="button">Set up pilot sticks</button><button class="btn small" id="calReset" type="button">Reset mapping</button></div>
+      <div id="calBox" class="calib" hidden><span class="hint" id="calStep"></span><b id="calText"></b><div class="meter"><i id="calMeter"></i></div><div class="row"><button class="btn small" id="calSkip" type="button">Skip</button><button class="btn small" id="calCancel" type="button">Cancel</button></div></div>
+      <div class="tblwrap"><table class="tbl" id="bindTable"></table></div>
+    </section>
+    <section>
+      <h3>DJI controllers</h3>
+      <div id="djiNotes"></div>
+    </section>
+    <section>
+      <h3>Keyboard and mouse</h3>
+      <dl class="kbd">
+        <dt>Arrow keys</dt><dd>Gimbal pan and tilt (hold Shift for fine)</dd>
+        <dt>Drag on the picture</dt><dd>Virtual gimbal stick (mouse or touch)</dd>
+        <dt>W S / A D</dt><dd>Pilot left stick: climb, descend / yaw (Mode 2)</dd>
+        <dt>I K / J L</dt><dd>Pilot right stick: forward, back / left, right</dd>
+        <dt>Space or Enter</dt><dd>Roll camera, go again</dd>
+        <dt>Esc or P</dt><dd>Cut (pause)</dd>
+        <dt>V</dt><dd>Swap main feed and FPV</dd>
+        <dt>G</dt><dd>Framing guides on and off</dd>
+        <dt>C</dt><dd>Next gimbal rate profile (1, 2, 3)</dd>
+        <dt>F</dt><dd>Next flight mode (T, N, S)</dd>
+        <dt>M</dt><dd>Sandbox: record a move</dd>
+        <dt>[ and ]</dt><dd>Sandbox: car slower / faster</dd>
+        <dt>1 to 6</dt><dd>Sandbox: change lens</dd>
+      </dl>
+    </section>
+  </section>
+
+  <section id="settings" class="drawer" hidden aria-label="Settings">
+    <header><h2>Settings</h2><button class="btn small" data-close type="button">Close</button></header>
+    <section>
+      <h3>Gimbal (camera op)</h3>
+      <label class="field" for="setGimbalMode"><span>Gimbal mode</span><select id="setGimbalMode"><option value="free">Free: pan holds its heading when the aircraft yaws</option><option value="follow">Follow: pan turns with the aircraft</option></select></label>
+      <label class="field" for="setCamLayout"><span>Camera op sticks</span><select id="setCamLayout"><option value="right">Right stick only: pans and tilts</option><option value="split">Split: left stick pans, right stick tilts</option></select></label>
+      <div class="field"><span>Gimbal profile in use <b>C cycles them</b></span><div class="seg" id="gpTabs"></div></div>
+      <label class="field" for="gpName"><span>Profile name</span><input type="text" id="gpName" maxlength="24"></label>
+      <div class="cols">
+        <label class="field" for="gpPanMax"><span>Pan max speed <b id="vGpPanMax"></b></span><input type="range" id="gpPanMax" min="5" max="270" step="1"></label>
+        <label class="field" for="gpTiltMax"><span>Tilt max speed <b id="vGpTiltMax"></b></span><input type="range" id="gpTiltMax" min="5" max="120" step="1"></label>
+        <label class="field" for="gpPanSmooth"><span>Pan smoothness <b id="vGpPanSmooth"></b></span><input type="range" id="gpPanSmooth" min="0" max="1" step="0.01"></label>
+        <label class="field" for="gpTiltSmooth"><span>Tilt smoothness <b id="vGpTiltSmooth"></b></span><input type="range" id="gpTiltSmooth" min="0" max="1" step="0.01"></label>
+        <label class="field" for="gpPanExpo"><span>Pan EXP <b id="vGpPanExpo"></b></span><input type="range" id="gpPanExpo" min="0" max="0.9" step="0.01"></label>
+        <label class="field" for="gpTiltExpo"><span>Tilt EXP <b id="vGpTiltExpo"></b></span><input type="range" id="gpTiltExpo" min="0" max="0.9" step="0.01"></label>
+      </div>
+      <label class="row" for="setInvert"><input type="checkbox" id="setInvert"> Invert tilt</label>
+      <p class="hint">The RC Plus tops out at 270&deg;/s pan and 120&deg;/s tilt. Controllable tilt is &minus;90&deg; to +30&deg; and pan stops at 300&deg; either side of the nose.</p>
+    </section>
+    <section>
+      <h3>Aircraft (pilot)</h3>
+      <div class="field"><span>Flight mode in use <b>F cycles T, N, S</b></span><div class="seg" id="fmTabs"></div></div>
+      <div class="cols">
+        <label class="field" for="fpVmax"><span>Max speed <b id="vFpVmax"></b></span><input type="range" id="fpVmax" min="1" max="26" step="0.5"></label>
+        <label class="field" for="fpYaw"><span>Max yaw rate <b id="vFpYaw"></b></span><input type="range" id="fpYaw" min="5" max="150" step="1"></label>
+        <label class="field" for="fpUp"><span>Max climb <b id="vFpUp"></b></span><input type="range" id="fpUp" min="0.5" max="8" step="0.5"></label>
+        <label class="field" for="fpDown"><span>Max descent <b id="vFpDown"></b></span><input type="range" id="fpDown" min="0.5" max="8" step="0.5"></label>
+        <label class="field" for="fpAccel"><span>Responsiveness <b id="vFpAccel"></b></span><input type="range" id="fpAccel" min="1" max="12" step="0.5"></label>
+        <label class="field" for="fpExpo"><span>Stick EXP <b id="vFpExpo"></b></span><input type="range" id="fpExpo" min="0" max="0.9" step="0.01"></label>
+      </div>
+      <p class="hint">Capped at the Inspire 3's published limits: 26 m/s, 8 m/s climb and descent, 150&deg;/s yaw. Responsiveness is how hard it accelerates and brakes.</p>
+    </section>
+    <section>
+      <h3>Display</h3>
+      <label class="field" for="setUnits"><span>Units</span><select id="setUnits"><option value="imperial">Feet and mph</option><option value="metric">Metres and km/h</option></select></label>
+      <label class="row" for="setGuides"><input type="checkbox" id="setGuides"> Thirds grid and safe area</label>
+      <label class="row" for="setRing"><input type="checkbox" id="setRing"> Framing target ring</label>
+      <label class="row" for="setDeadband"><span class="muted">Stick deadband</span> <input type="range" id="setDeadband" min="0" max="0.15" step="0.01" style="max-width:180px"> <b id="vDead" class="muted"></b></label>
+      <div class="row"><button class="btn small" id="setReset" type="button">Reset settings</button></div>
+    </section>
+  </section>
+
+  <div id="toast" class="toast" hidden role="status"></div>
+  <div id="fatal" class="fatal" hidden><div><h2>The 3D view couldn't start</h2><p class="muted">This browser blocked WebGL or the 3D library failed to load. Try Chrome or Edge with hardware acceleration on.</p></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+const $=(s,r=document)=>r.querySelector(s);
+const app=$('#app');
+if(!window.THREE){$('#fatal').hidden=false;return;}
+
+/* ---------- Aircraft and camera figures ---------- */
+// From DJI's Inspire 3 spec page and user manual v3.0. Values marked "est." are not published and are training estimates.
+const SPEC={
+  vmax:{T:3,N:15,S:26},          // m/s horizontal. S 26 m/s (94 km/h) published; N 15 from the v1.0 manual (unconfirmed); T est.
+  yawMax:{T:30,N:100,S:150},     // deg/s. 150 published max; T and N est.
+  tiltLim:{T:20,N:35,S:40},      // deg max pitch angle, published
+  accel:{T:2,N:6,S:9},           // m/s^2 response limit, est.
+  tau:{T:.8,N:.45,S:.3},         // s velocity response lag, est.
+  vUp:8,vDown:8,                 // m/s, published
+  tiltMin:-90,tiltMax:30,        // deg controllable tilt (extension off), published
+  panLimit:300,                  // deg controllable pan either side of the nose, published
+  sensorW:36,                    // mm, full-frame width
+  ceilingAGL:121.9               // 400 ft
+};
+const LENSES=[
+  {id:'18',label:'DL 18mm F2.8 ASPH',f:18},
+  {id:'24',label:'DL 24mm F2.8 LS ASPH',f:24},
+  {id:'35',label:'DL 35mm F2.8 LS ASPH',f:35},
+  {id:'50',label:'DL 50mm F2.8 LS ASPH',f:50},
+  {id:'75',label:'DL 75mm F1.8',f:75},
+  {id:'90',label:'Viltrox AF 90mm F3.5 Air',f:90}
+];
+const FLIGHT_MODES=[{id:'T',label:'T - Tripod (slow, fine)'},{id:'N',label:'N - Normal'},{id:'S',label:'S - Sport (fast)'}];
+
+/* ---------- Small math ---------- */
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth01=t=>t*t*(3-2*t);
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const smoothstep=(a,b,x)=>smooth01(clamp((x-a)/(b-a),0,1));
+const DEG=Math.PI/180;
+const TAU=Math.PI*2;
+const wrapPi=a=>{a=(a+Math.PI)%TAU;if(a<0)a+=TAU;return a-Math.PI;};
+const damp=(c,t,l,dt)=>c+(t-c)*(1-Math.exp(-l*dt));
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hash2(i,j){let h=(Math.imul(i,374761393)+Math.imul(j,668265263))|0;h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;return(h>>>0)/4294967295;}
+function vnoise(x,y){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
+  const a=hash2(i,j),b=hash2(i+1,j),c=hash2(i,j+1),d=hash2(i+1,j+1);return(a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v)*2-1;}
+function fbm(x,y,o){let s=0,a=.5,f=1;for(let k=0;k<o;k++){s+=a*vnoise(x*f,y*f);f*=2.03;a*=.5;}return s;}
+const catmull=(p0,p1,p2,p3,t)=>.5*(2*p1+(p2-p0)*t+(2*p0-5*p1+4*p2-p3)*t*t+(3*p1-p0-3*p2+p3)*t*t*t);
+function expo(x,e,dead){const a=Math.abs(x);if(a<=dead)return 0;const t=Math.min(1,(a-dead)/(1-dead));return Math.sign(x)*((1-e)*t+e*t*t*t);}
+
+/* ---------- Persistence (this browser only) ---------- */
+const store={get(k,d){try{const v=localStorage.getItem('dualop.'+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+  set(k,v){try{localStorage.setItem('dualop.'+k,JSON.stringify(v));}catch(e){}}};
+// Three gimbal rate profiles and one flight profile per mode, each editable in Settings.
+const GIMBAL_PROFILES=[
+  {name:'Slow',panMax:25,tiltMax:18,panSmooth:.6,tiltSmooth:.6,panExpo:.4,tiltExpo:.4},
+  {name:'Medium',panMax:60,tiltMax:40,panSmooth:.35,tiltSmooth:.35,panExpo:.3,tiltExpo:.3},
+  {name:'Fast',panMax:120,tiltMax:80,panSmooth:.15,tiltSmooth:.15,panExpo:.2,tiltExpo:.2}];
+const FLIGHT_PROFILES={
+  T:{vmax:SPEC.vmax.T,up:2,down:2,yaw:SPEC.yawMax.T,accel:SPEC.accel.T,expo:.35},
+  N:{vmax:SPEC.vmax.N,up:6,down:6,yaw:SPEC.yawMax.N,accel:SPEC.accel.N,expo:.3},
+  S:{vmax:SPEC.vmax.S,up:8,down:8,yaw:SPEC.yawMax.S,accel:SPEC.accel.S,expo:.2}};
+const clone=o=>JSON.parse(JSON.stringify(o));
+const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',
+  gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
+const settings=Object.assign(clone(DEFAULTS),store.get('settings',{}));
+if(!SPEC.vmax[settings.flightMode])settings.flightMode='N';
+if(!(settings.v>=2))settings.camLayout='right';
+if(!(settings.v>=3)){settings.gimbalProfiles=clone(GIMBAL_PROFILES);settings.flightProfiles=clone(FLIGHT_PROFILES);settings.gimbalProfile=1;}
+settings.v=3;
+const gimbalProf=()=>settings.gimbalProfiles[settings.gimbalProfile]||settings.gimbalProfiles[1];
+const flightProf=()=>settings.flightProfiles[settings.flightMode]||settings.flightProfiles.N;
+const saveSettings=()=>store.set('settings',settings);
+
+/* ---------- World: road, terrain and trees, rebuilt per location (practice valley or an imported map) ---------- */
+const ROAD_W=8,LANE=1.9,A_LAT=3.6,GCELL=40,TCELL=16,gkey=(i,j)=>i*100003+j;
+const VALLEY_ROAD=[[0,0],[260,-60],[520,-10],[690,150],[660,360],[500,440],[360,560],[400,720],[300,850],[90,820],[-40,660],[-200,610],[-370,500],[-430,290],[-330,120],[-170,50]];
+let ROAD_N=1,ROAD_LEN=1,DS=1,roadDraw=1,nearIdx=0;
+let RX=new Float32Array(1),RZ=new Float32Array(1),RY=new Float32Array(1),RH=new Float32Array(1),RK=new Float32Array(1),VLIM=new Float32Array(1);
+let rgrid=new Map(),trees=[],tgrid=new Map(),grid=null;
+let world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};
+const ridx=s=>((Math.floor(s/DS)%ROAD_N)+ROAD_N)%ROAD_N;
+const wrapS=s=>((s%ROAD_LEN)+ROAD_LEN)%ROAD_LEN;
+const _rs={x:0,y:0,z:0,yaw:0,grade:0};
+function roadAt(s){s=wrapS(s);const f=s/DS,i=Math.floor(f)%ROAD_N,j=(i+1)%ROAD_N,t=f-Math.floor(f);
+  _rs.x=RX[i]+(RX[j]-RX[i])*t;_rs.z=RZ[i]+(RZ[j]-RZ[i])*t;_rs.y=RY[i]+(RY[j]-RY[i])*t;_rs.yaw=RH[i]+wrapPi(RH[j]-RH[i])*t;_rs.grade=(RY[j]-RY[i])/DS;return _rs;}
+// Closed routes loop. Open routes run out and back, so the car turns around at each end.
+function buildRoad(pts,closed,groundAt){
+  let ctrl=pts.map(p=>new THREE.Vector3(p[0],0,p[1]));
+  if(!closed)ctrl=ctrl.concat(ctrl.slice(1,-1).reverse());
+  const curve=new THREE.CatmullRomCurve3(ctrl,true,'centripetal');
+  ROAD_LEN=curve.getLength();ROAD_N=Math.max(400,Math.round(ROAD_LEN/1.6));DS=ROAD_LEN/ROAD_N;
+  RX=new Float32Array(ROAD_N);RZ=new Float32Array(ROAD_N);RY=new Float32Array(ROAD_N);RH=new Float32Array(ROAD_N);RK=new Float32Array(ROAD_N);VLIM=new Float32Array(ROAD_N);
+  const sp=curve.getSpacedPoints(ROAD_N);
+  for(let i=0;i<ROAD_N;i++){RX[i]=sp[i].x;RZ[i]=sp[i].z;}
+  for(let i=0;i<ROAD_N;i++){const n=(i+1)%ROAD_N,p=(i-1+ROAD_N)%ROAD_N;RH[i]=Math.atan2(-(RX[n]-RX[p]),-(RZ[n]-RZ[p]));}
+  const raw=new Float32Array(ROAD_N);
+  for(let i=0;i<ROAD_N;i++){const n=(i+3)%ROAD_N,p=(i-3+ROAD_N)%ROAD_N;raw[i]=Math.abs(wrapPi(RH[n]-RH[p]))/(6*DS);}
+  for(let i=0;i<ROAD_N;i++){let s=0;for(let k=-8;k<=8;k++)s+=raw[(i+k+ROAD_N)%ROAD_N];RK[i]=s/17;VLIM[i]=clamp(Math.sqrt(A_LAT/Math.max(RK[i],1e-5)),1.5,40);}
+  // Road elevation: the ground under the centre line, smoothed over about 40 m so grades stay drivable
+  const g0=new Float32Array(ROAD_N);for(let i=0;i<ROAD_N;i++)g0[i]=groundAt(RX[i],RZ[i]);
+  const w=Math.max(1,Math.round(20/DS));for(let i=0;i<ROAD_N;i++){let s=0;for(let k=-w;k<=w;k++)s+=g0[(i+k+ROAD_N)%ROAD_N];RY[i]=s/(2*w+1);}
+  roadDraw=ROAD_N;
+  if(!closed){const end=pts[pts.length-1];let best=1e18;for(let i=0;i<ROAD_N*.65;i++){const d=(RX[i]-end[0])**2+(RZ[i]-end[1])**2;if(d<best){best=d;roadDraw=i;}}}
+  rgrid=new Map();
+  for(let i=0;i<roadDraw;i+=2){const k=gkey(Math.floor(RX[i]/GCELL),Math.floor(RZ[i]/GCELL));let L=rgrid.get(k);if(!L)rgrid.set(k,L=[]);L.push(i);}
+}
+function roadDist(x,z){const ci=Math.floor(x/GCELL),cj=Math.floor(z/GCELL);let best=1e12;
+  for(let a=-2;a<=2;a++)for(let b=-2;b<=2;b++){const L=rgrid.get(gkey(ci+a,cj+b));if(!L)continue;for(let n=0;n<L.length;n++){const i=L[n],dx=RX[i]-x,dz=RZ[i]-z,d=dx*dx+dz*dz;if(d<best){best=d;nearIdx=i;}}}
+  return best===1e12?200:Math.sqrt(best);}
+
+/* ---------- Terrain height ---------- */
+function valleyH(x,z){
+  const TC=world.TC,d=roadDist(x,z),flat=smoothstep(10,90,d);
+  if(flat<=0)return -.4;
+  const n=fbm(x*.0032+11.3,z*.0032-7.7,4)*.5+.5;
+  let h=Math.pow(Math.max(0,n),1.7)*70*flat;
+  const m=smoothstep(640,1280,Math.hypot(x-TC.x,z-TC.z));
+  if(m>0)h+=m*flat*(120+260*(fbm(x*.0021+3.1,z*.0021+9.4,5)*.5+.5));
+  return h-.4;
+}
+// Imported maps: a regular grid of heights in metres above the map's base elevation, north row first
+function gridAt(G,x,z){const fx=clamp((x-G.x0)/G.cx,0,G.nx-1.001),fz=clamp((z-G.z0)/G.cz,0,G.nz-1.001),ix=Math.floor(fx),iz=Math.floor(fz),tx=fx-ix,tz=fz-iz,i=iz*G.nx+ix;
+  return (G.h[i]*(1-tx)+G.h[i+1]*tx)*(1-tz)+(G.h[i+G.nx]*(1-tx)+G.h[i+G.nx+1]*tx)*tz;}
+let terrainH=valleyH;
+
+/* ---------- Renderer, scene, light ---------- */
+const canvas=$('#gl');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});}
+catch(e){$('#fatal').hidden=false;return;}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;
+const scene=new THREE.Scene();
+const HORIZON=0xd5dcd9;
+scene.fog=new THREE.Fog(HORIZON,380,2700);
+
+{ // sky dome
+  const R=4000,g=new THREE.SphereGeometry(R,32,16),pos=g.attributes.position,col=[];
+  const zen=new THREE.Color(0x4a76ad),hor=new THREE.Color(HORIZON),low=new THREE.Color(0xb6bcb4),c=new THREE.Color();
+  for(let i=0;i<pos.count;i++){const y=pos.getY(i)/R;if(y>0)c.copy(hor).lerp(zen,Math.pow(y,.5));else c.copy(hor).lerp(low,Math.min(1,-y*4));col.push(c.r,c.g,c.b);}
+  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  var sky=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide,fog:false,depthWrite:false}));
+  sky.renderOrder=-1;scene.add(sky);
+}
+scene.add(new THREE.HemisphereLight(0xdfe8f5,0x5a4a32,.78));
+const sun=new THREE.DirectionalLight(0xfff0d8,.95);
+const SUN_DIR=new THREE.Vector3(-.55,.62,.56).normalize();
+sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-85,right:85,top:85,bottom:-85,near:10,far:1000});
+sun.shadow.bias=-.0006;sun.shadow.camera.updateProjectionMatrix();
+scene.add(sun,sun.target);
+
+const worldGroup=new THREE.Group();scene.add(worldGroup);
+function grassTexture(repeatX,repeatZ){
+  const cv=document.createElement('canvas');cv.width=cv.height=256;const x2=cv.getContext('2d'),img=x2.createImageData(256,256),r=rng(11);
+  for(let i=0;i<256*256;i++){const v=226+(r()-.5)*44;img.data[i*4]=v;img.data[i*4+1]=v;img.data[i*4+2]=v;img.data[i*4+3]=255;}
+  x2.putImageData(img,0,0);
+  for(let k=0;k<260;k++){x2.fillStyle=r()<.6?'rgba(40,40,30,.10)':'rgba(255,255,240,.10)';x2.beginPath();x2.ellipse(r()*256,r()*256,4+r()*18,3+r()*10,r()*3,0,TAU);x2.fill();}
+  const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(repeatX,repeatZ);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return tex;
+}
+function disposeWorld(){
+  for(const o of worldGroup.children.slice()){worldGroup.remove(o);o.traverse(m=>{if(m.geometry)m.geometry.dispose();
+    const mats=m.material?(Array.isArray(m.material)?m.material:[m.material]):[];for(const mt of mats){if(mt.map)mt.map.dispose();if(mt.emissiveMap&&mt.emissiveMap!==mt.map)mt.emissiveMap.dispose();mt.dispose();}});}
+}
+const C_GRASS=new THREE.Color(0x6b7444),C_DRY=new THREE.Color(0xb39a5d),C_SHOULDER=new THREE.Color(0x8b8274),C_ROCK=new THREE.Color(0x77736c),C_SNOW=new THREE.Color(0xeef1f2);
+function buildValleyMesh(){
+  const SIZE=2600,SEG=240,g=new THREE.PlaneGeometry(SIZE,SIZE,SEG,SEG);g.rotateX(-Math.PI/2);
+  const p=g.attributes.position,col=new Float32Array(p.count*3),c=new THREE.Color(),TC=world.TC;
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i)+TC.x,z=p.getZ(i)+TC.z,h=terrainH(x,z),d=roadDist(x,z);
+    p.setXYZ(i,x,h,z);
+    const n=fbm(x*.012+40,z*.012-13,3)*.5+.5;
+    c.copy(C_GRASS).lerp(C_DRY,clamp(n*1.35-.2,0,1));
+    if(d<10)c.lerp(C_SHOULDER,1-smoothstep(5,10,d));
+    c.lerp(C_ROCK,smoothstep(80,150,h)*.85);
+    c.lerp(C_SNOW,smoothstep(185,235,h+n*30));
+    col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
+  }
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));g.computeVertexNormals();
+  const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true,map:grassTexture(SIZE/8,SIZE/8)}));m.receiveShadow=true;worldGroup.add(m);
+}
+// Real terrain: aerial imagery when the map has it, otherwise colour by elevation and slope
+function buildGridMesh(G,img){
+  const sx=G.cx*(G.nx-1),sz=G.cz*(G.nz-1),g=new THREE.PlaneGeometry(sx,sz,G.nx-1,G.nz-1);g.rotateX(-Math.PI/2);
+  const p=g.attributes.position;
+  for(let iz=0;iz<G.nz;iz++)for(let ix=0;ix<G.nx;ix++){const k=iz*G.nx+ix;p.setXYZ(k,G.x0+ix*G.cx,G.h[k],G.z0+iz*G.cz);}
+  g.computeVertexNormals();
+  let mat;
+  if(img){const tex=new THREE.CanvasTexture(img);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());tex.minFilter=THREE.LinearMipmapLinearFilter;
+    mat=new THREE.MeshLambertMaterial({map:tex,color:0xb4b4b4,emissive:0x5c5c5c,emissiveMap:tex});}
+  else{const col=new Float32Array(p.count*3),nrm=g.attributes.normal,c=new THREE.Color();
+    for(let k=0;k<p.count;k++){const h=p.getY(k)+(world.base||0),slope=1-nrm.getY(k),n=fbm(p.getX(k)*.01,p.getZ(k)*.01,3)*.5+.5;
+      c.copy(C_GRASS).lerp(C_DRY,clamp(n*1.3-.2,0,1));c.lerp(C_ROCK,smoothstep(.25,.45,slope));c.lerp(C_SNOW,smoothstep(2850,3000,h+n*60));col[k*3]=c.r;col[k*3+1]=c.g;col[k*3+2]=c.b;}
+    g.setAttribute('color',new THREE.BufferAttribute(col,3));mat=new THREE.MeshLambertMaterial({vertexColors:true,map:grassTexture(sx/8,sz/8)});}
+  const m=new THREE.Mesh(g,mat);m.receiveShadow=true;worldGroup.add(m);
+}
+function buildRoadMeshes(){
+  const wrap=roadDraw===ROAD_N,last=wrap?ROAD_N:roadDraw-1;
+  const ribbon=(off0,off1,y0,y1,filter)=>{const v=[],idx=[];let n=0;
+    for(let i=0;i<=last;i++){const k=i%ROAD_N;if(filter&&!filter(i)){n=-1;continue;}
+      const cx=Math.cos(RH[k]),sz=-Math.sin(RH[k]);
+      v.push(RX[k]+cx*off0,RY[k]+y0,RZ[k]+sz*off0,RX[k]+cx*off1,RY[k]+y1,RZ[k]+sz*off1);
+      const base=v.length/3-2;if(n>=0&&base>=2)idx.push(base-2,base-1,base,base-1,base+1,base);n=0;}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setIndex(idx);g.computeVertexNormals();return g;};
+  const add=(g,mat)=>{const m=new THREE.Mesh(g,mat);m.receiveShadow=true;worldGroup.add(m);};
+  add(ribbon(-ROAD_W/2,ROAD_W/2,.02,.02),new THREE.MeshLambertMaterial({color:0x3a3d40,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2}));
+  const gravel=new THREE.MeshLambertMaterial({color:0x8b8274,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-2});
+  add(ribbon(ROAD_W/2,ROAD_W/2+1.6,.02,-.45),gravel);add(ribbon(-ROAD_W/2-1.6,-ROAD_W/2,-.45,.02),gravel);
+  const paint=(col)=>new THREE.MeshLambertMaterial({color:col,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-4});
+  add(ribbon(-ROAD_W/2+.25,-ROAD_W/2+.4,.04,.04),paint(0xe6e2d6));
+  add(ribbon(ROAD_W/2-.4,ROAD_W/2-.25,.04,.04),paint(0xe6e2d6));
+  const dashEvery=Math.round(12/DS),dashLen=Math.round(3.5/DS)+1;
+  add(ribbon(-.08,.08,.04,.04,i=>i%dashEvery<dashLen),paint(0xe0b23a));
+}
+// Pines: scattered by noise in the practice valley, placed on forest pixels of the aerial photo on real maps
+function buildTrees(R,img){
+  trees=[];tgrid=new Map();
+  const TC=world.TC,hx=world.hx*.98,hz=world.hz*.98;let px=null,iw=0,ih=0;
+  if(img){iw=img.width;ih=img.height;px=img.getContext('2d').getImageData(0,0,iw,ih).data;}
+  const forest=(x,z)=>{const u=Math.floor((x-TC.x+world.hx)/(2*world.hx)*iw),v=Math.floor((z-TC.z+world.hz)/(2*world.hz)*ih);if(u<0||v<0||u>=iw||v>=ih)return false;
+    const o=(v*iw+u)*4,r=px[o],g=px[o+1],b=px[o+2],lum=(.299*r+.587*g+.114*b)/255;return lum<.3&&g>=r*.92&&g>=b*.95;};
+  const target=img?7000:2700;
+  for(let k=0;k<target*8&&trees.length<target;k++){
+    let x,z;
+    if(img&&R()<.75){const i=Math.floor(R()*roadDraw),a=R()*TAU,rr=10+R()*480;x=RX[i]+Math.cos(a)*rr;z=RZ[i]+Math.sin(a)*rr;}
+    else{x=TC.x+(R()*2-1)*hx;z=TC.z+(R()*2-1)*hz;}
+    if(Math.abs(x-TC.x)>hx||Math.abs(z-TC.z)>hz)continue;
+    const d=roadDist(x,z);if(d<(img?10:16))continue;
+    if(img){if(!forest(x,z))continue;}else{const dens=fbm(x*.008+5,z*.008+2,3);if(dens<.02&&R()>.1)continue;}
+    const h=terrainH(x,z);if(world.base==null?h>165:h+world.base>2900)continue;
+    const H=img?9+R()*14:7+R()*11;trees.push({x,z,b:h-.3,H,r:H*(img?.1+R()*.05:.19+R()*.08)});
+  }
+  if(!trees.length)return;
+  const cone=new THREE.ConeGeometry(1,1,7,1);cone.translate(0,.5,0);
+  const trunk=new THREE.CylinderGeometry(.12,.16,1,5);trunk.translate(0,.5,0);
+  const im=new THREE.InstancedMesh(cone,new THREE.MeshLambertMaterial({color:0xffffff}),trees.length);
+  const tm=new THREE.InstancedMesh(trunk,new THREE.MeshLambertMaterial({color:0x4a3626}),trees.length);
+  const M=new THREE.Matrix4(),q=new THREE.Quaternion(),s=new THREE.Vector3(),p=new THREE.Vector3(),c=new THREE.Color(),up=new THREE.Vector3(0,1,0);
+  trees.forEach((t,i)=>{
+    p.set(t.x,t.b+t.H*.18,t.z);s.set(t.r,t.H*.82,t.r);q.setFromAxisAngle(up,R()*TAU);M.compose(p,q,s);im.setMatrixAt(i,M);
+    c.setHSL(.36+R()*.06,.32+R()*.15,(img?.13:.17)+R()*.07);im.setColorAt(i,c);
+    p.set(t.x,t.b,t.z);s.set(1,t.H*.25,1);M.compose(p,q,s);tm.setMatrixAt(i,M);
+    const k=gkey(Math.floor(t.x/TCELL),Math.floor(t.z/TCELL));let L=tgrid.get(k);if(!L)tgrid.set(k,L=[]);L.push(t);
+  });
+  im.castShadow=true;tm.castShadow=true;im.receiveShadow=true;worldGroup.add(im,tm);
+}
+function treesNear(x,z,fn){const ci=Math.floor(x/TCELL),cj=Math.floor(z/TCELL);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const L=tgrid.get(gkey(ci+a,cj+b));if(L)for(const t of L)fn(t);}}
+function clearanceAt(x,z){let top=terrainH(x,z);treesNear(x,z,t=>{if(Math.hypot(t.x-x,t.z-z)<t.r+6)top=Math.max(top,t.b+t.H);});return top;}
+function treeHit(p){let hit=false;treesNear(p.x,p.z,t=>{if(hit||p.y<t.b||p.y>t.b+t.H)return;const r=t.r*(1-(p.y-t.b)/t.H)+.6;if(Math.hypot(t.x-p.x,t.z-p.z)<r)hit=true;});return hit;}
+function buildRanges(R){ // distant peaks around the practice valley
+  const rock=new THREE.MeshLambertMaterial({color:0x6c7784,flatShading:true}),snow=new THREE.MeshLambertMaterial({color:0xf2f5f7,flatShading:true}),TC=world.TC;
+  for(let i=0;i<36;i++){const a=i/36*TAU+R()*.1,rr=1800+R()*550,H=260+R()*460,rad=300+R()*280,x=TC.x+Math.cos(a)*rr,z=TC.z+Math.sin(a)*rr,ry=R()*TAU;
+    const m=new THREE.Mesh(new THREE.ConeGeometry(rad,H,7),rock);m.position.set(x,H/2-30,z);m.rotation.y=ry;worldGroup.add(m);
+    const k=.32,cap=new THREE.Mesh(new THREE.ConeGeometry(rad*k*1.02,H*k,7),snow);cap.position.set(x,-30+H-H*k/2+.5,z);cap.rotation.y=ry;worldGroup.add(cap);}
+}
+// Heights travel in map packs as base64 Int16 decimetres above the map's base elevation
+function decodeHeights(b64,n){const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+  const i16=new Int16Array(u8.buffer,0,Math.min(n,u8.length>>1)),out=new Float32Array(n);for(let i=0;i<i16.length;i++)out[i]=i16[i]/10;return out;}
+function encodeHeights(h){const i16=new Int16Array(h.length);for(let i=0;i<h.length;i++)i16[i]=clamp(Math.round(h[i]*10),-32768,32767);
+  const u8=new Uint8Array(i16.buffer);let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);}
+function imageToCanvas(src){return new Promise((res,rej)=>{if(src instanceof HTMLCanvasElement)return res(src);const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);res(c);};im.onerror=()=>rej(new Error('The map photo could not be decoded.'));im.src=src;});}
+let worldToken=0;
+async function buildWorld(def){
+  const token=++worldToken;let img=null;
+  if(def&&(def.imageCanvas||def.imagery))img=await imageToCanvas(def.imageCanvas||def.imagery);
+  if(token!==worldToken)return false;
+  disposeWorld();const R=rng(7);
+  if(!def){
+    world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};grid=null;terrainH=valleyH;
+    buildRoad(VALLEY_ROAD,true,()=>0);buildValleyMesh();buildRoadMeshes();buildTrees(R,null);buildRanges(R);
+    scene.fog.near=380;scene.fog.far=2700;setFar(6000);
+  }else{
+    const nx=def.nx,nz=def.nz,raw=decodeHeights(def.h,nx*nz);
+    const G={nx,nz,x0:-def.sizeX/2,z0:-def.sizeZ/2,cx:def.sizeX/(nx-1),cz:def.sizeZ/(nz-1),h:raw};
+    world={id:def.id,name:def.name,base:def.base,TC:{x:0,z:0},hx:def.sizeX/2,hz:def.sizeZ/2,credits:def.credits||'',lat:def.lat,lon:def.lon};
+    grid=G;terrainH=(x,z)=>gridAt(G,x,z);
+    buildRoad(def.route,!!def.closed,terrainH);
+    // Cut a bench for the road: flat at road height under it, blending back to the real ground over a few cells
+    const C=new Float32Array(raw),bw=ROAD_W/2+3,fade=Math.max(G.cx,G.cz)*2.5;
+    for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){const x=G.x0+ix*G.cx,z=G.z0+iz*G.cz,d=roadDist(x,z);if(d>=bw+fade)continue;
+      const k=iz*nx+ix,ry=RY[nearIdx]-.35;C[k]=ry+(raw[k]-ry)*smoothstep(bw,bw+fade,d);}
+    grid={...G,h:C};const cut=grid;terrainH=(x,z)=>gridAt(cut,x,z);
+    buildGridMesh(grid,img);buildRoadMeshes();buildTrees(R,img);
+    const span=Math.max(def.sizeX,def.sizeZ);scene.fog.near=700;scene.fog.far=Math.max(3500,span*.8);setFar(Math.max(9000,span*1.6));
+  }
+  for(const k in startCache)delete startCache[k];for(const k in reqCache)delete reqCache[k];
+  car.s=0;carPose(car);car.smYaw=car.yaw;car.v=0;
+  return true;
+}
+
+/* ---------- Car ---------- */
+const carMesh=new THREE.Group(),wheels=[];
+{
+  const paint=new THREE.MeshLambertMaterial({color:0xa8261c}),dark=new THREE.MeshLambertMaterial({color:0x17191b}),glass=new THREE.MeshLambertMaterial({color:0x26313b});
+  const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;carMesh.add(m);return m;};
+  add(new THREE.BoxGeometry(1.9,.62,4.6),paint,0,.62,0);
+  add(new THREE.BoxGeometry(1.86,.2,4.5),dark,0,.28,0);
+  add(new THREE.BoxGeometry(1.66,.6,2.3),glass,0,1.22,.3);
+  add(new THREE.BoxGeometry(1.6,.07,2.05),paint,0,1.55,.35);
+  const wg=new THREE.CylinderGeometry(.36,.36,.28,14);wg.rotateZ(Math.PI/2);
+  for(const [x,z] of [[-.93,-1.45],[.93,-1.45],[-.93,1.45],[.93,1.45]])wheels.push(add(wg,dark,x,.36,z));
+  const hl=new THREE.MeshBasicMaterial({color:0xfff6dc}),tl=new THREE.MeshBasicMaterial({color:0xd8261c});
+  add(new THREE.BoxGeometry(.42,.14,.05),hl,-.62,.74,-2.31);add(new THREE.BoxGeometry(.42,.14,.05),hl,.62,.74,-2.31);
+  add(new THREE.BoxGeometry(.5,.12,.05),tl,-.6,.78,2.31);add(new THREE.BoxGeometry(.5,.12,.05),tl,.6,.78,2.31);
+  carMesh.rotation.order='YXZ';scene.add(carMesh);
+}
+const CAR_AIM_Y=.9;
+const car={s:0,v:0,x:0,y:0,z:0,yaw:0,smYaw:0,pitch:0};
+function carPose(c){const r=roadAt(c.s);c.yaw=r.yaw;c.x=r.x+Math.cos(r.yaw)*LANE;c.z=r.z-Math.sin(r.yaw)*LANE;c.y=r.y;c.pitch=Math.atan(r.grade);}
+function vLimitAhead(s,dist){let m=99;const i0=ridx(s),n=Math.ceil(dist/DS);for(let k=0;k<=n;k+=2){const v=VLIM[(i0+k)%ROAD_N];if(v<m)m=v;}return m;}
+function carStep(c,dt,target){
+  const vl=vLimitAhead(c.s,c.v*c.v/9+15),tgt=Math.min(target,vl);
+  c.v=c.v<tgt?Math.min(tgt,c.v+3.2*dt):Math.max(tgt,c.v-5*dt);
+  c.s=wrapS(c.s+c.v*dt);carPose(c);c.smYaw=wrapPi(c.smYaw+wrapPi(c.yaw-c.smYaw)*(1-Math.exp(-1.5*dt)));
+}
+function placeCarMesh(dt){carMesh.position.set(car.x,car.y,car.z);carMesh.rotation.set(car.pitch,car.yaw,0);for(const w of wheels)w.rotation.x-=car.v*dt/.36;}
+
+/* ---------- Pilot's mark (visible on the FPV feed only) ---------- */
+const ghost=new THREE.Group();
+{const s=new THREE.Mesh(new THREE.SphereGeometry(1,20,12),new THREE.MeshBasicMaterial({color:0x62d08b,transparent:true,opacity:.16,depthWrite:false}));
+ const core=new THREE.Mesh(new THREE.OctahedronGeometry(.7),new THREE.MeshBasicMaterial({color:0x62d08b}));
+ ghost.add(s,core);ghost.userData.shell=s;ghost.traverse(o=>o.layers.set(1));ghost.visible=false;scene.add(ghost);}
+
+/* ---------- Cameras ---------- */
+const camMain=new THREE.PerspectiveCamera(40,16/9,.5,6000);camMain.rotation.order='YXZ';
+const camFPV=new THREE.PerspectiveCamera(62,16/9,.5,6000);camFPV.rotation.order='YXZ';camFPV.layers.enable(1);
+const FPV_TILT=-10*DEG;
+function setFar(v){camMain.far=camFPV.far=v;camMain.updateProjectionMatrix();camFPV.updateProjectionMatrix();}
+const hfovOf=f=>2*Math.atan(SPEC.sensorW/(2*f));
+const vfovOf=f=>2*Math.atan(Math.tan(hfovOf(f)/2)*9/16);
+
+/* ---------- Shots ---------- */
+const BUILTIN=[
+  {id:'side',name:'Side Track',diff:1,lens:'35',dur:35,pick:'mixed',tolM:6,
+   brief:'Pace the car from its right side. Hold a clean profile with the car dead centre.',
+   frame:{tx:0,ty:0,tol:.16},speed:()=>17,path:(u,c)=>c.rel(0,26,10)},
+  {id:'lead',name:'Lead Car',diff:2,lens:'35',dur:35,pick:'straight',tolM:6,
+   brief:'The aircraft leads the car, flying backwards, and lets it close in while dropping low. Keep the grille centred and a touch low.',
+   frame:{tx:0,ty:-.12,tol:.15},speed:()=>15,path:(u,c)=>{const e=ease(u);return c.rel(lerp(34,13,e),3.5*Math.sin(u*TAU),lerp(10,4.5,e));}},
+  {id:'chase',name:'Chase',diff:2,lens:'50',dur:40,pick:'twisty',tolM:5,
+   brief:'Tuck in behind on the long lens. Car centred on the lower third line while it gets on the gas through the bends.',
+   frame:{tx:0,ty:-1/3,tol:.14},speed:u=>u<.25?14:lerp(14,21,smooth01(clamp((u-.25)/.35,0,1))),path:(u,c)=>c.rel(-24,0,9)},
+  {id:'overtake',name:'Overtake',diff:3,lens:'24',dur:30,pick:'straight',tolM:7,
+   brief:'Start behind on the left, pass the car and finish out front. Pan through 180 degrees without losing it.',
+   frame:{tx:0,ty:0,tol:.15},speed:()=>14,path:(u,c)=>c.rel(lerp(-38,42,ease(u)),-16,10)},
+  {id:'orbit',name:'Orbit',diff:3,lens:'35',dur:40,pick:'straight',tolM:7,
+   brief:'The car creeps forward while the aircraft circles it. Keep it centred through a full 360.',
+   frame:{tx:0,ty:0,tol:.15},speed:()=>4,path:(u,c)=>{const a=Math.PI+u*TAU;return c.rel(30*Math.cos(a),30*Math.sin(a),14);}},
+  {id:'push',name:'Descending Push-In',diff:3,lens:'50',dur:30,pick:'straight',tolM:6,
+   brief:'Start high and wide behind, then descend and close in. Park the car on the lower-right thirds point the whole way down.',
+   frame:{tx:1/3,ty:-1/3,tol:.13},speed:()=>13,path:(u,c)=>{const e=ease(u);return c.rel(lerp(-75,-16,e),lerp(12,4,e),lerp(55,6,e));}},
+  {id:'flyby',name:'Fly-By',diff:4,lens:'24',dur:20,pick:'straight',tolM:6,world:true,
+   brief:'The aircraft crosses the road low as the car blows past about 25 m away. Whip-pan and tilt through it.',
+   frame:{tx:0,ty:0,tol:.18},speed:()=>18,path:null}
+];
+BUILTIN.forEach((s,i)=>s.no=i+1);
+const SANDBOX={id:'sandbox',name:'Sandbox',diff:0,lens:'35',dur:Infinity,pick:'start',tolM:0,no:0,
+  brief:'No clock and no scorecard. Fly, frame and rehearse, then record a move as a new shot.',
+  frame:{tx:0,ty:0,tol:.16},speed:()=>16,
+  path:(u,c,t)=>c.rel(32*Math.sin(t*.05),24*Math.cos(t*.037),20+8*Math.sin(t*.07))};
+let myShots=store.get('myShots',[]);
+const shotsHere=()=>myShots.filter(s=>(s.world||'valley')===world.id);
+const allShots=()=>BUILTIN.concat(shotsHere());
+const shotById=id=>id==='sandbox'?SANDBOX:allShots().find(s=>s.id===id);
+const FRAMINGS=[
+  {id:'c',name:'Centre',tx:0,ty:0},{id:'lt',name:'Lower third, centred',tx:0,ty:-1/3},
+  {id:'l3',name:'Left third',tx:-1/3,ty:0},{id:'r3',name:'Right third',tx:1/3,ty:0},
+  {id:'ll',name:'Lower-left thirds point',tx:-1/3,ty:-1/3},{id:'lr',name:'Lower-right thirds point',tx:1/3,ty:-1/3}];
+
+function shotSpeed(sh,u,t){
+  if(sh.custom){const f=clamp(t*10,0,sh.spd.length-1),i=Math.floor(f),j=Math.min(i+1,sh.spd.length-1);return lerp(sh.spd[i],sh.spd[j],f-i);}
+  return sh.speed(u);
+}
+const startCache={};
+function pickStart(sh){
+  if(sh.custom)return sh.startS;
+  if(sh.pick==='start')return 0;
+  if(startCache[sh.id]!=null)return startCache[sh.id];
+  let avg=0;for(let k=0;k<=10;k++)avg+=sh.speed(k/10)/11;
+  const len=avg*sh.dur+80;let cand=[];
+  for(let s=0;s<ROAD_LEN;s+=25){let k=0,n=0,lo=99;for(let d=0;d<len;d+=8){const i=ridx(s+d);k+=RK[i];lo=Math.min(lo,VLIM[i]);n++;}cand.push({s,k:k/n,lo});}
+  const ok=cand.filter(c=>c.lo>=5);if(ok.length)cand=ok;
+  cand.sort((a,b)=>a.k-b.k);
+  const pos={straight:0,mixed:.5,twisty:.85}[sh.pick]||0;
+  return startCache[sh.id]=cand[Math.floor(pos*(cand.length-1))].s;
+}
+
+/* ---------- Simulation state ---------- */
+const S={mode:'home',role:store.get('role','camera'),shot:SANDBOX,t:0,cd:0,lensId:'35',focal:35,swap:false,split:false,
+  sandSpeed:16,carStopped:false,take:0,fly:null,clearY:0,result:null,crash:null,pausedFrom:null};
+const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0};
+const gim={pan:0,tilt:0,panRate:0,tiltRate:0,prevW:0,prevT:0,rel:0};
+const P=new THREE.Vector3(),Pprev=new THREE.Vector3(),Vp=new THREE.Vector3(),Vprev=new THREE.Vector3(),Ap=new THREE.Vector3();
+const _v=new THREE.Vector3(),_w=new THREE.Vector3();
+
+const ctx={p:new THREE.Vector3(),f:new THREE.Vector3(),r:new THREE.Vector3(),out:new THREE.Vector3(),
+  rel(a,s,h){return this.out.set(this.p.x+this.f.x*a+this.r.x*s,this.p.y+h,this.p.z+this.f.z*a+this.r.z*s);}};
+function setCtx(){const y=car.smYaw;ctx.p.set(car.x,car.y,car.z);ctx.f.set(-Math.sin(y),0,-Math.cos(y));ctx.r.set(Math.cos(y),0,-Math.sin(y));}
+
+function rawPath(t,out){
+  const sh=S.shot,u=sh.dur===Infinity?0:clamp(t/sh.dur,0,1);
+  if(sh.id==='flyby'){out.copy(S.fly.Q).addScaledVector(S.fly.D,lerp(-160,160,u));out.y=Math.max(S.fly.Q.y,terrainH(out.x,out.z))+12;return out;}
+  if(sh.custom){const n=sh.pts.length-1,f=clamp(t*10,0,n),i=Math.min(Math.floor(f),n-1),a=f-i;
+    const p0=sh.pts[Math.max(i-1,0)],p1=sh.pts[i],p2=sh.pts[i+1],p3=sh.pts[Math.min(i+2,n)];
+    const A=catmull(p0[0],p1[0],p2[0],p3[0],a),B=catmull(p0[1],p1[1],p2[1],p3[1],a),C=catmull(p0[2],p1[2],p2[2],p3[2],a);
+    if(sh.ref==='world')return out.set(A,B,C);setCtx();return out.copy(ctx.rel(A,B,C));}
+  setCtx();return out.copy(sh.path(u,ctx,t));
+}
+// Path target with terrain and tree clearance (look-ahead along the target's velocity)
+function pathPoint(t,out,dt){
+  rawPath(t,out);
+  const need=Math.max(clearanceAt(out.x,out.z),clearanceAt(out.x+Vp.x*1.5,out.z+Vp.z*1.5),clearanceAt(out.x+Vp.x*3,out.z+Vp.z*3))+4;
+  S.clearY=need>S.clearY?damp(S.clearY,need,2.5,dt):damp(S.clearY,need,.6,dt);
+  if(out.y<S.clearY)out.y=S.clearY;
+  return out;
+}
+
+const lensById=id=>LENSES.find(l=>l.id===id)||LENSES[2];
+function setLens(id){const L=lensById(id);S.lensId=L.id;S.focal=L.f;applyFocal();}
+function applyFocal(){camMain.fov=vfovOf(S.focal)/DEG;camMain.updateProjectionMatrix();}
+
+function aimAngles(tx,ty,out){
+  const dx=car.x-camMain.position.x,dy=car.y+CAR_AIM_Y-camMain.position.y,dz=car.z-camMain.position.z;
+  const yaw=Math.atan2(-dx,-dz),pitch=Math.atan2(dy,Math.hypot(dx,dz)),hf=hfovOf(S.focal),vf=vfovOf(S.focal);
+  out.pan=yaw+Math.atan(tx*Math.tan(hf/2));out.tilt=pitch-Math.atan(ty*Math.tan(vf/2));return out;
+}
+const _aim={pan:0,tilt:0};
+
+/* ---------- Aircraft ---------- */
+function autoStep(dt){
+  const w=2.4,z=1;
+  let ax=w*w*(P.x-drone.pos.x)+2*z*w*(Vp.x-drone.vel.x),ay=w*w*(P.y-drone.pos.y)+2*z*w*(Vp.y-drone.vel.y),az=w*w*(P.z-drone.pos.z)+2*z*w*(Vp.z-drone.vel.z);
+  const al=Math.hypot(ax,ay,az);if(al>12){ax*=12/al;ay*=12/al;az*=12/al;}
+  drone.vel.x+=ax*dt;drone.vel.y+=ay*dt;drone.vel.z+=az*dt;
+  const hs=Math.hypot(drone.vel.x,drone.vel.z);if(hs>SPEC.vmax.S){drone.vel.x*=SPEC.vmax.S/hs;drone.vel.z*=SPEC.vmax.S/hs;}
+  drone.vel.y=clamp(drone.vel.y,-SPEC.vDown,SPEC.vUp);
+  drone.pos.addScaledVector(drone.vel,dt);drone.acc.set(ax,ay,az);
+  const tgt=hs>3?Math.atan2(-drone.vel.x,-drone.vel.z):Math.atan2(-(car.x-drone.pos.x),-(car.z-drone.pos.z));
+  const prev=drone.yaw;drone.yaw=wrapPi(drone.yaw+wrapPi(tgt-drone.yaw)*(1-Math.exp(-1.6*dt)));drone.yawRate=wrapPi(drone.yaw-prev)/dt;
+}
+function pilotStep(dt,inp){
+  const fm=settings.flightMode,fp=flightProf(),vmax=Math.min(fp.vmax,SPEC.vmax.S),ex=x=>expo(x,fp.expo,settings.deadband);
+  const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
+  const p=ex(inp.pitch)*vmax,r=ex(inp.roll)*vmax,thr=ex(inp.thr);
+  const tvx=fx*p+rx*r,tvz=fz*p+rz*r,tvy=thr>0?thr*Math.min(fp.up,SPEC.vUp):thr*Math.min(fp.down,SPEC.vDown);
+  const k=1-Math.exp(-dt/SPEC.tau[fm]);let dvx=(tvx-drone.vel.x)*k,dvz=(tvz-drone.vel.z)*k;
+  const lim=fp.accel*dt,l=Math.hypot(dvx,dvz);if(l>lim){dvx*=lim/l;dvz*=lim/l;}
+  drone.vel.x+=dvx;drone.vel.z+=dvz;
+  const dvy=(tvy-drone.vel.y)*(1-Math.exp(-dt/.35));drone.vel.y+=dvy;
+  drone.acc.set(dvx/dt,dvy/dt,dvz/dt);
+  const tyr=-ex(inp.yaw)*Math.min(fp.yaw,SPEC.yawMax.S)*DEG;drone.yawRate+=(tyr-drone.yawRate)*(1-Math.exp(-dt/.18));
+  drone.yaw=wrapPi(drone.yaw+drone.yawRate*dt);
+  drone.pos.addScaledVector(drone.vel,dt);
+  const gh=terrainH(drone.pos.x,drone.pos.z);
+  if(drone.pos.y-gh>SPEC.ceilingAGL){drone.pos.y=gh+SPEC.ceilingAGL;if(drone.vel.y>0)drone.vel.y=0;S.ceiling=true;}else S.ceiling=false;
+}
+function droneVisual(dt){
+  const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
+  const af=drone.acc.x*fx+drone.acc.z*fz,ar=drone.acc.x*rx+drone.acc.z*rz,vf=drone.vel.x*fx+drone.vel.z*fz,vr=drone.vel.x*rx+drone.vel.z*rz;
+  const lim=(seats().pilotHuman&&S.mode!=='home'?SPEC.tiltLim[settings.flightMode]:SPEC.tiltLim.N)*DEG;
+  drone.visPitch=damp(drone.visPitch,clamp(-(Math.atan(af/9.81)+vf*.012),-lim,lim),6,dt);
+  drone.visRoll=damp(drone.visRoll,clamp(-(Math.atan(ar/9.81)+vr*.012),-lim,lim),6,dt);
+}
+
+/* ---------- Gimbal ---------- */
+function gimbalStep(dt,inp,dyaw){
+  const db=settings.deadband,gp=gimbalProf();
+  const tp=-expo(inp.pan,gp.panExpo,db)*gp.panMax*DEG,tt=expo(inp.tilt,gp.tiltExpo,db)*(settings.invertTilt?-1:1)*gp.tiltMax*DEG;
+  gim.panRate+=(tp-gim.panRate)*(1-Math.exp(-dt/(.04+gp.panSmooth*.9)));
+  gim.tiltRate+=(tt-gim.tiltRate)*(1-Math.exp(-dt/(.04+gp.tiltSmooth*.9)));
+  gim.pan=wrapPi(gim.pan+gim.panRate*dt+(settings.gimbalMode==='follow'?dyaw:0));
+  gim.tilt+=gim.tiltRate*dt;
+  if(gim.tilt>SPEC.tiltMax*DEG){gim.tilt=SPEC.tiltMax*DEG;if(gim.tiltRate>0)gim.tiltRate=0;}
+  if(gim.tilt<SPEC.tiltMin*DEG){gim.tilt=SPEC.tiltMin*DEG;if(gim.tiltRate<0)gim.tiltRate=0;}
+}
+// The X9 pans +/-300 deg from the nose, not endlessly. Track the unwrapped angle and stop at the limit.
+function panLimit(){
+  const lim=SPEC.panLimit*DEG;gim.rel+=wrapPi(wrapPi(gim.pan-drone.yaw)-wrapPi(gim.rel));
+  if(Math.abs(gim.rel)>lim){gim.rel=clamp(gim.rel,-lim,lim);gim.pan=wrapPi(drone.yaw+gim.rel);gim.panRate=0;S.panLimited=true;}else S.panLimited=false;
+}
+const resetRel=()=>{gim.rel=wrapPi(gim.pan-drone.yaw);};
+function autoCamStep(dt){
+  camMain.position.copy(drone.pos).y-=.4;
+  const f=S.shot.frame;aimAngles(f.tx,f.ty,_aim);
+  gim.pan=wrapPi(gim.pan+wrapPi(_aim.pan-gim.pan)*(1-Math.exp(-5*dt)));
+  gim.tilt=clamp(damp(gim.tilt,_aim.tilt,5,dt),SPEC.tiltMin*DEG,SPEC.tiltMax*DEG);gim.panRate=0;gim.tiltRate=0;
+}
+function placeCameras(){
+  camMain.position.copy(drone.pos).y-=.4;camMain.rotation.set(gim.tilt,gim.pan,0);
+  camFPV.position.set(drone.pos.x-Math.sin(drone.yaw)*.3,drone.pos.y+.1,drone.pos.z-Math.cos(drone.yaw)*.3);
+  camFPV.rotation.set(drone.visPitch+FPV_TILT,drone.yaw,drone.visRoll);
+  camMain.updateMatrixWorld();camFPV.updateMatrixWorld();
+}
+
+/* ---------- Scoring ---------- */
+const SMOOTH_K_CAM=90,SMOOTH_K_PIL=2.5;
+function newScore(){return{time:0,cam:{pts:0,on:0,lost:0,lostT:0,lostFlag:false,alpha:0,zone:''},pil:{pts:0,on:0,dev:0,close:0,closeFlag:false,d:0},track:[],tAcc:0};}
+let SC=newScore();
+const seats=()=>({camHuman:S.role!=='pilot',pilotHuman:S.role!=='camera'});
+function frameZone(){
+  const f=S.shot.frame;_v.set(car.x,car.y+CAR_AIM_Y,car.z);
+  _w.set(0,0,-1).applyQuaternion(camMain.quaternion);
+  const ahead=_v.clone().sub(camMain.position).dot(_w)>0;
+  _v.project(camMain);
+  if(!ahead||Math.abs(_v.x)>1||Math.abs(_v.y)>1)return{zone:'lost',x:_v.x,y:_v.y};
+  const err=Math.hypot((_v.x-f.tx)*16/9,_v.y-f.ty);
+  return{zone:err<f.tol?'on':err<f.tol*2.2?'near':'framed',x:_v.x,y:_v.y};
+}
+function scoreStep(dt){
+  const {camHuman,pilotHuman}=seats(),sh=S.shot;SC.time+=dt;
+  let cz=0,pz=0;
+  if(camHuman){
+    const fz=frameZone();SC.cam.zone=fz.zone;
+    SC.cam.pts+=({on:1,near:.6,framed:.25,lost:0})[fz.zone]*dt;
+    if(fz.zone==='on')SC.cam.on+=dt;
+    if(fz.zone==='lost'){SC.cam.lostT+=dt;if(SC.cam.lostT>.3&&!SC.cam.lostFlag){SC.cam.lost++;SC.cam.lostFlag=true;}}else{SC.cam.lostT=0;SC.cam.lostFlag=false;}
+    const wr=gim.panRate+(settings.gimbalMode==='follow'?drone.yawRate:0);
+    const a=Math.hypot(wr-gim.prevW,gim.tiltRate-gim.prevT)/Math.max(dt,1e-3)/DEG;gim.prevW=wr;gim.prevT=gim.tiltRate;
+    SC.cam.alpha+=Math.min(a,3000)*dt;
+    cz=({on:1,near:2,framed:3,lost:4})[fz.zone];
+  }
+  if(pilotHuman&&sh.tolM>0){
+    const d=drone.pos.distanceTo(P);SC.pil.d=d;
+    const z=d<sh.tolM?'on':d<sh.tolM*2?'near':'off';
+    SC.pil.pts+=({on:1,near:.5,off:0})[z]*dt;if(z==='on')SC.pil.on+=dt;
+    SC.pil.dev+=Math.min(Math.hypot(drone.acc.x-Ap.x,drone.acc.z-Ap.z),30)*dt;
+    pz=({on:1,near:2,off:3})[z];
+  }
+  if(pilotHuman){
+    const dc=Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z);
+    if(dc<8){if(!SC.pil.closeFlag){SC.pil.close++;SC.pil.closeFlag=true;}}else if(dc>10)SC.pil.closeFlag=false;
+  }
+  SC.tAcc+=dt;while(SC.tAcc>=.1){SC.tAcc-=.1;SC.track.push([cz,pz]);}
+}
+function grade(s){return s>=92?'S':s>=85?'A':s>=75?'B':s>=62?'C':s>=50?'D':'F';}
+const NOTES={S:'Print it. Moving on.',A:'Circle take.',B:'Usable. One more for safety.',C:'Going again.',D:'Going again. Back to one.',F:'Reset. Back to one.'};
+function computeResults(){
+  const {camHuman,pilotHuman}=seats(),T=Math.max(SC.time,.001),r={};
+  if(camHuman){const c=SC.cam;r.cam={framing:c.pts/T*100,on:c.on/T*100,smooth:100*Math.exp(-(c.alpha/T)/SMOOTH_K_CAM),lost:c.lost};
+    r.cam.score=clamp(.75*r.cam.framing+.25*r.cam.smooth-4*c.lost,0,100);}
+  if(pilotHuman){const p=SC.pil;r.pil={line:p.pts/T*100,on:p.on/T*100,smooth:100*Math.exp(-(p.dev/T)/SMOOTH_K_PIL),close:p.close};
+    r.pil.score=clamp(.75*r.pil.line+.25*r.pil.smooth-8*p.close,0,100);}
+  r.score=r.cam&&r.pil?(r.cam.score+r.pil.score)/2:(r.cam||r.pil).score;
+  if(S.crash)r.score=0;
+  r.score=Math.round(r.score);r.grade=S.crash?'X':grade(r.score);
+  r.note=S.crash?'Aircraft down: '+S.crash+'. Check your line and go again.':NOTES[r.grade];
+  return r;
+}
+
+/* ---------- Input: keyboard, pointer, controllers ---------- */
+const keys=new Set();
+const kb={pan:0,tilt:0,zoom:0,thr:0,yaw:0,pitch:0,roll:0};
+const vstick={active:false,id:null,ox:0,oy:0,x:0,y:0};
+const input={cam:{pan:0,tilt:0,zoom:0},pil:{thr:0,yaw:0,pitch:0,roll:0}};
+const isTyping=e=>/INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
+let bind=store.get('bind',null);
+if(!bind||!bind.calib)bind={pilot:null,camera:null,calib:{camera:{},pilot:{}}};
+const saveBind=()=>store.set('bind',bind);
+let padBlocked=false;
+const dji={supported:'serial' in navigator,list:[],n:0};
+const djiu={supported:!!navigator.usb,list:[],n:0};
+const DJI_MODELS={rc331:'DJI RC 2',rm700:'DJI RC Plus',rm330:'DJI RC'};
+
+function devices(){
+  const out=[];let gps=[];
+  try{gps=navigator.getGamepads?Array.from(navigator.getGamepads()):[];}catch(e){padBlocked=true;}
+  for(const g of gps){if(!g||g.connected===false)continue;
+    out.push({key:'gp'+g.index,ckey:g.id,label:cleanName(g.id),kind:g.mapping==='standard'?'standard':'generic',axes:g.axes,buttons:g.buttons.map(b=>b.value)});}
+  for(const d of dji.list)if(d.ok)out.push({key:d.key,ckey:'dji-serial',label:d.label,kind:'dji',axes:d.axes,buttons:[]});
+  for(const d of djiu.list)if(d.ok)out.push({key:d.key,ckey:'dji-usb:'+(d.model||'rc'),label:d.label,kind:'dji',axes:d.axes,buttons:[]});
+  for(const d of bridge.devices)out.push({key:'rcb:'+d.id,ckey:'rcb:'+d.model,label:d.model+' …'+String(d.id).slice(-4),kind:'dji-adb',axes:d.axes,buttons:d.buttons||[]});
+  return out;
+}
+// RC bridge (rc-bridge.mjs): DJI Android controllers such as the RC Plus, read over adb and streamed as server-sent events.
+const bridge={es:null,devices:[],state:'off',url:''};
+function bridgeURL(){const h=location.hostname;return /^https?:$/.test(location.protocol)&&(h==='localhost'||h==='127.0.0.1')?location.origin+'/rc':'http://127.0.0.1:8790/rc';}
+function bridgeConnect(url){
+  if(bridge.es)bridge.es.close();
+  try{bridge.es=new EventSource(url);}catch(e){bridge.state='blocked';renderControls();return;}
+  bridge.url=url;bridge.state='connecting';
+  bridge.es.onmessage=e=>{try{const m=JSON.parse(e.data);const was=bridge.state;bridge.devices=Array.isArray(m.devices)?m.devices:[];bridge.state='on';if(was!=='on'){renderControls();renderPadStatus();}}catch(err){}};
+  bridge.es.onerror=()=>{const was=bridge.state;bridge.devices=[];bridge.state=was==='on'||was==='lost'?'lost':'off';if(was!==bridge.state)renderControls();};
+}
+function cleanName(id){return(id||'Controller').replace(/\s*\((STANDARD GAMEPAD\s*)?Vendor:.*$/i,'').replace(/\s*\(.*?\)\s*$/,'').trim()||'Controller';}
+// Camera op defaults: "split" puts pan on the left stick and tilt on the right (the Inspire 2 dual-op layout).
+// DJI serial axes are [right H, right V, left V, left H, left dial], centred on 0.
+function defaultMap(seat,kind){
+  const split=settings.camLayout==='split';
+  if(kind==='dji')return seat==='camera'?{pan:{axis:split?3:0,c:0,e:1},tilt:{axis:1,c:0,e:1}}
+    :{thr:{axis:2,c:0,e:1},yaw:{axis:3,c:0,e:1},pitch:{axis:1,c:0,e:1},roll:{axis:0,c:0,e:1}};
+  return seat==='camera'?{pan:{axis:split?0:2,c:0,e:1},tilt:{axis:3,c:0,e:-1}}
+    :{thr:{axis:1,c:0,e:-1},yaw:{axis:0,c:0,e:1},pitch:{axis:3,c:0,e:-1},roll:{axis:2,c:0,e:1}};
+}
+const mapFor=(seat,dev)=>dev?(bind.calib[seat][dev.ckey]||defaultMap(seat,dev.kind)):null;
+function seatDevices(devs){
+  const pick=k=>k&&k!=='kb'?devs.find(d=>d.key===k)||null:null;
+  let pil=pick(bind.pilot),cam=pick(bind.camera);
+  if(S.role==='dual'){
+    if(!pil&&bind.pilot!=='kb')pil=devs.find(d=>d!==cam)||null;
+    if((!cam||cam===pil)&&bind.camera!=='kb')cam=devs.find(d=>d!==pil)||null;
+  }else{
+    if(!pil&&bind.pilot!=='kb')pil=devs[0]||null;
+    if(!cam&&bind.camera!=='kb')cam=devs[0]||null;
+  }
+  return{pilot:pil,camera:cam};
+}
+function axisVal(m,dev){if(!m||!dev||m.axis>=dev.axes.length)return 0;const den=m.e-m.c;if(Math.abs(den)<.15)return 0;return clamp((dev.axes[m.axis]-m.c)/den,-1,1);}
+const kstep=(cur,tgt,dt)=>cur+clamp(tgt-cur,-(tgt===0?8:4)*dt,(tgt===0?8:4)*dt);
+const kd=(a,b)=>(keys.has(a)?1:0)-(keys.has(b)?1:0);
+let lastDevs=[],seatDev={pilot:null,camera:null};
+function pollInput(dt){
+  const devs=devices();lastDevs=devs;seatDev=seatDevices(devs);
+  const fine=keys.has('ShiftLeft')||keys.has('ShiftRight')?.35:1;
+  kb.pan=kstep(kb.pan,kd('ArrowRight','ArrowLeft')*fine,dt);kb.tilt=kstep(kb.tilt,kd('ArrowUp','ArrowDown')*fine,dt);
+  kb.thr=kstep(kb.thr,kd('KeyW','KeyS'),dt);kb.yaw=kstep(kb.yaw,kd('KeyD','KeyA'),dt);
+  kb.pitch=kstep(kb.pitch,kd('KeyI','KeyK'),dt);kb.roll=kstep(kb.roll,kd('KeyL','KeyJ'),dt);
+  const cm=mapFor('camera',seatDev.camera),pm=mapFor('pilot',seatDev.pilot);
+  input.cam.pan=clamp(axisVal(cm&&cm.pan,seatDev.camera)+kb.pan+(vstick.active?vstick.x:0),-1,1);
+  input.cam.tilt=clamp(axisVal(cm&&cm.tilt,seatDev.camera)+kb.tilt+(vstick.active?vstick.y:0),-1,1);
+  for(const f of ['thr','yaw','pitch','roll'])input.pil[f]=clamp(axisVal(pm&&pm[f],seatDev.pilot)+kb[f],-1,1);
+  padButtons(devs);
+}
+const prevBtn={};
+function padButtons(devs){
+  for(const d of devs){for(const i of [0,1,9]){const k=d.key+':'+i,on=(d.buttons[i]||0)>.5;if(on&&!prevBtn[k])onPadButton(i);prevBtn[k]=on;}}
+}
+function onPadButton(i){
+  if(calib.active)return;
+  if(i===0)confirmAction();
+  else if(i===9){if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();}
+  else if(i===1){if(S.mode==='brief'||S.mode==='results')goHome();}
+}
+
+/* ---------- Stick setup (calibration) ---------- */
+const CAL_STEPS={
+  camera:[{fn:'pan',text:'PAN: push the stick fully RIGHT and hold'},{fn:'tilt',text:'TILT: push the stick fully UP (tilt up) and hold'}],
+  pilot:[{fn:'thr',text:'THROTTLE: push fully UP (climb) and hold'},{fn:'yaw',text:'YAW: push fully RIGHT and hold'},{fn:'pitch',text:'PITCH: push fully FORWARD (up) and hold'},{fn:'roll',text:'ROLL: push fully RIGHT and hold'}]
+};
+const calib={active:false,seat:null,i:0,phase:'push',hold:0,base:null,cand:null,map:{},dev:null,used:new Set()};
+function startCalib(seat){
+  if(!lastDevs.length){toast('No controller found. Move a stick or press a button so the browser can see it, then try again.');return;}
+  Object.assign(calib,{active:true,seat,i:0,phase:'push',hold:0,cand:null,map:{},dev:null,used:new Set()});
+  calib.base=snapshotAxes();$('#calBox').hidden=false;calibUI();
+}
+function snapshotAxes(){const b={};for(const d of lastDevs)b[d.key]=Array.from(d.axes);return b;}
+function calibStep(dt){
+  if(!calib.active)return;
+  const step=CAL_STEPS[calib.seat][calib.i];
+  if(calib.phase==='push'){
+    let best=null;
+    for(const d of lastDevs){const base=calib.base[d.key];if(!base)continue;if(calib.dev&&d.key!==calib.dev)continue;
+      d.axes.forEach((v,ax)=>{if(calib.used.has(d.key+':'+ax))return;const dv=v-base[ax];if(!best||Math.abs(dv)>Math.abs(best.dv))best={d,ax,dv,v};});}
+    const mag=best?Math.abs(best.dv):0;$('#calMeter').style.width=clamp(mag/.6*100,0,100)+'%';
+    if(best&&mag>.45){
+      if(calib.cand&&calib.cand.key===best.d.key&&calib.cand.ax===best.ax){calib.hold+=dt;calib.cand.v=best.v;}
+      else{calib.cand={key:best.d.key,ckey:best.d.ckey,ax:best.ax,v:best.v};calib.hold=0;}
+      if(calib.hold>.45){const c=calib.base[calib.cand.key][calib.cand.ax];
+        calib.map[step.fn]={axis:calib.cand.ax,c,e:calib.cand.v};calib.dev=calib.cand.key;calib.ckey=calib.cand.ckey;
+        calib.used.add(calib.cand.key+':'+calib.cand.ax);calib.phase='release';calib.hold=0;calibUI();}
+    }else{calib.hold=0;}
+  }else{
+    const d=lastDevs.find(x=>x.key===calib.dev),m=calib.map[step.fn];
+    if(!d){cancelCalib();return;}
+    if(Math.abs(d.axes[m.axis]-m.c)<.15){calib.hold+=dt;if(calib.hold>.25)nextCalib();}else calib.hold=0;
+  }
+}
+function nextCalib(){calib.i++;calib.phase='push';calib.hold=0;calib.cand=null;calib.base=snapshotAxes();
+  if(calib.i>=CAL_STEPS[calib.seat].length)finishCalib();else calibUI();}
+function finishCalib(){
+  const seat=calib.seat,def=defaultMap(seat,'standard');
+  const map=Object.assign({},bind.calib[seat][calib.ckey]||{},calib.map);
+  for(const f of Object.keys(def))if(!map[f])map[f]=def[f];
+  if(calib.ckey){bind.calib[seat][calib.ckey]=map;bind[seat]=calib.dev;}
+  saveBind();calib.active=false;$('#calBox').hidden=true;renderControls();toast((seat==='camera'?'Camera':'Pilot')+' sticks saved for this controller.');
+}
+function cancelCalib(){calib.active=false;$('#calBox').hidden=true;}
+function calibUI(){const steps=CAL_STEPS[calib.seat],st=steps[calib.i];
+  $('#calStep').textContent=(calib.seat==='camera'?'Camera':'Pilot')+' setup · step '+(calib.i+1)+' of '+steps.length;
+  $('#calText').textContent=calib.phase==='push'?st.text:'Got it. Let the stick return to centre.';$('#calMeter').style.width='0%';}
+
+/* ---------- DJI controller over USB serial (DUML) ---------- */
+// Same request/response the community RC-N1 simulator bridges use: enable simulator mode, then poll stick positions.
+const CRC8=new Uint8Array(256),CRC16=new Uint16Array(256);
+for(let i=0;i<256;i++){let c=i;for(let k=0;k<8;k++)c=c&1?(c>>>1)^0x8C:c>>>1;CRC8[i]=c;c=i;for(let k=0;k<8;k++)c=c&1?(c>>>1)^0x8408:c>>>1;CRC16[i]=c;}
+const crc8=(b,n,s)=>{let c=s;for(let i=0;i<n;i++)c=CRC8[(b[i]^c)&255];return c;};
+const crc16=(b,n,s)=>{let c=s;for(let i=0;i<n;i++)c=(c>>>8)^CRC16[(b[i]^c)&255];return c&0xffff;};
+function duml(src,dst,type,set,id,payload,seq){
+  const len=13+payload.length,p=new Uint8Array(len);
+  p[0]=0x55;p[1]=len&255;p[2]=((len>>8)&3)|4;p[3]=crc8(p,3,0x77);p[4]=src;p[5]=dst;p[6]=seq&255;p[7]=(seq>>8)&255;p[8]=type;p[9]=set;p[10]=id;
+  p.set(payload,11);const c=crc16(p,len-2,0x3692);p[len-2]=c&255;p[len-1]=c>>8;return p;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function serialAllowed(){try{if(document.featurePolicy&&!document.featurePolicy.allowsFeature('serial'))return false;}catch(e){}return dji.supported;}
+async function djiConnect(){
+  if(!serialAllowed()){renderDjiNotes(true);toast('USB serial is blocked in this viewer. Use the standalone file in Chrome (see DJI controllers).');return;}
+  let port;
+  try{port=await navigator.serial.requestPort({filters:[{usbVendorId:0x2ca3}]});}catch(e){if(e&&e.name!=='NotFoundError')toast('Could not open the port: '+(e.message||e));return;}
+  if(dji.list.some(d=>d.ok&&d.port===port)){toast('That port is already connected.');return;}
+  try{await port.open({baudRate:115200});}catch(e){toast('The controller port is busy. Close DJI Assistant or other apps using it, then try again.');return;}
+  try{await port.setSignals({dataTerminalReady:true,requestToSend:true});}catch(e){}
+  const n=++dji.n,dev={key:'dji'+n,label:'DJI controller '+n+' (USB)',port,axes:[0,0,0,0,0],ok:true,seq:0x34eb,buf:new Uint8Array(0),packets:0,last:'',hz:0,cnt:0,t0:performance.now()};
+  dji.list.push(dev);dev.writer=port.writable.getWriter();
+  djiRead(dev);djiWrite(dev);toast('Port open. Waiting for stick data…');renderControls();
+  setTimeout(()=>{if(dev.ok&&!dev.packets){djiClose(dev);
+    toast('No stick data on that port. DJI controllers can show more than one port: press Connect again and pick the other one.');}
+    else if(dev.ok)toast('DJI controller is sending sticks. Run stick setup for its seat.');},2500);
+}
+function djiClose(dev){dev.ok=false;try{dev.reader&&dev.reader.cancel();}catch(e){}try{dev.writer.releaseLock();}catch(e){}
+  setTimeout(()=>{try{dev.port.close();}catch(e){}},100);dji.list=dji.list.filter(d=>d!==dev);renderControls();}
+// Simulator-mode request once, then again every 3 s; stick request every 20 ms.
+async function djiWrite(dev){let k=0;
+  while(dev.ok){try{if(k%150===0)await dev.writer.write(duml(0x0a,0x06,0x40,0x06,0x24,[1],0x34eb));
+    await dev.writer.write(duml(0x0a,0x06,0x40,0x06,0x01,[],0x34eb));}catch(e){dev.ok=false;break;}k++;await sleep(20);}}
+async function djiRead(dev){
+  let reader;try{reader=dev.port.readable.getReader();dev.reader=reader;}catch(e){dev.ok=false;return;}
+  try{while(dev.ok){const {value,done}=await reader.read();if(done)break;if(value)djiFeed(dev,value);}}catch(e){}
+  dev.ok=false;try{reader.releaseLock();}catch(e){}renderControls();
+}
+function djiFeed(dev,chunk){
+  const b=new Uint8Array(dev.buf.length+chunk.length);b.set(dev.buf);b.set(chunk,dev.buf.length);let o=0;
+  while(b.length-o>=4){
+    if(b[o]!==0x55){o++;continue;}
+    const len=b[o+1]|((b[o+2]&3)<<8);
+    if(len<13||crc8(b.subarray(o,o+3),3,0x77)!==b[o+3]){o++;continue;}
+    if(b.length-o<len)break;
+    const pk=b.subarray(o,o+len);
+    if(crc16(pk,len-2,0x3692)===(pk[len-2]|(pk[len-1]<<8))){
+      if(pk[9]===0x06&&pk[10]===0x01&&len>=13+13)djiSticks(dev,pk.subarray(11,len-2));
+      else if(pk[9]===0x00&&(pk[10]===0x81||pk[10]===0x82)&&!dev.model){const s=String.fromCharCode(...pk.subarray(11,19)).replace(/\0.*$/,'');if(/^r[cm]\d{3}/i.test(s)){dev.model=s.toLowerCase();dev.label=(DJI_MODELS[dev.model]||'DJI controller '+s.toUpperCase())+' (USB)';renderControls();}}
+    }
+    o+=len;
+  }
+  dev.buf=b.slice(o);
+}
+// Stick reply: uint16 little-endian channels, 364..1684 centred on 1024 (right H, right V, left V, left H, dials).
+// RC-N1 bridges read them at frame bytes 13, 16, 19, 22, 25. The RC 2 tags each value with its channel number
+// instead (status byte, then value-lo, value-hi, channel id), so that layout is detected from the ids.
+const DJI_OFF=[2,5,8,11,14];
+function djiSticks(dev,pl){
+  if(pl.length<16)return;
+  if(pl[3]===1&&pl[6]===2){for(let k=0;1+3*k+2<pl.length&&pl[3+3*k]===k+1;k++)dev.axes[k]=clamp(((pl[1+3*k]|(pl[2+3*k]<<8))-1024)/660,-1.2,1.2);}
+  else DJI_OFF.forEach((o,c)=>{dev.axes[c]=clamp(((pl[o]|(pl[o+1]<<8))-1024)/660,-1.2,1.2);});
+  const sig=dev.axes.map(v=>v.toFixed(3)).join();if(dev.sig&&sig!==dev.sig)dev.moved=true;dev.sig=sig;
+  dev.packets++;dev.cnt++;const now=performance.now();if(now-dev.t0>1000){dev.hz=dev.cnt;dev.cnt=0;dev.t0=now;}
+  dev.last=Array.from(pl.slice(0,18)).map(x=>x.toString(16).padStart(2,'0')).join(' ');
+}
+
+/* ---------- DJI controller over direct USB (WebUSB): RC 2, RC Plus ---------- */
+// These expose a vendor "BULK Interface" (class 255, subclass 0x43) that answers the same DUML requests.
+function usbAllowed(){try{if(document.featurePolicy&&!document.featurePolicy.allowsFeature('usb'))return false;}catch(e){}return djiu.supported;}
+async function djiUsbConnect(){
+  if(!usbAllowed()){renderDjiNotes();toast('Direct USB is blocked here. Open http://localhost:8790 or the standalone file in Chrome or Edge.');return;}
+  let udev;try{udev=await navigator.usb.requestDevice({filters:[{vendorId:0x2ca3}]});}catch(e){return;}
+  if(djiu.list.some(d=>d.ok&&d.usb===udev)){toast('That controller is already connected.');return;}
+  try{
+    await udev.open();if(udev.configuration===null)await udev.selectConfiguration(1);
+    const ifc=udev.configuration.interfaces.find(i=>{const a=i.alternates[0];return a.interfaceClass===255&&a.interfaceSubclass===0x43;});
+    if(!ifc)throw new Error('it has no DJI data interface');
+    await udev.claimInterface(ifc.interfaceNumber);
+    const eps=ifc.alternates[0].endpoints,epOut=eps.find(e=>e.direction==='out'),epIn=eps.find(e=>e.direction==='in');
+    const n=++djiu.n,dev={key:'djiu'+n,label:'DJI controller '+n+' (USB)',usb:udev,epOut:epOut.endpointNumber,epIn:epIn.endpointNumber,
+      axes:[0,0,0,0,0,0],ok:true,buf:new Uint8Array(0),packets:0,hz:0,cnt:0,t0:performance.now(),last:'',model:'',moved:false,sig:''};
+    djiu.list.push(dev);usbRead(dev);usbWrite(dev);renderControls();
+    toast('Connected. Move the sticks and watch the bars in Controls.');
+  }catch(e){try{await udev.close();}catch(err){}toast('Could not open the controller: '+(e.message||e)+'. Close DJI Assistant or anything else using it, then try again.');}
+}
+async function usbWrite(dev){let k=0;
+  while(dev.ok){try{if(k%150===0)await dev.usb.transferOut(dev.epOut,duml(0x0a,0x06,0x40,0x06,0x24,[1],0x34eb));
+    await dev.usb.transferOut(dev.epOut,duml(0x0a,0x06,0x40,0x06,0x01,[],0x34eb));}catch(e){dev.ok=false;break;}k++;await sleep(20);}
+  renderControls();}
+async function usbRead(dev){
+  while(dev.ok){try{const r=await dev.usb.transferIn(dev.epIn,4096);if(r.data&&r.data.byteLength)djiFeed(dev,new Uint8Array(r.data.buffer,r.data.byteOffset,r.data.byteLength));}catch(e){dev.ok=false;break;}}
+  renderControls();}
+if(navigator.usb)navigator.usb.addEventListener('disconnect',e=>{for(const d of djiu.list)if(d.usb===e.device)d.ok=false;djiu.list=djiu.list.filter(d=>d.ok);renderControls();});
+
+/* ---------- Run lifecycle ---------- */
+function resetDroneBehindCar(){
+  setCtx();drone.pos.copy(ctx.rel(-30,8,22));drone.vel.set(-Math.sin(car.smYaw)*car.v,0,-Math.cos(car.smYaw)*car.v);
+  drone.yaw=car.smYaw;drone.yawRate=0;drone.visPitch=0;drone.visRoll=0;
+  placeCameras();aimAngles(0,0,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;gim.panRate=gim.tiltRate=0;resetRel();
+}
+function prepareRun(sh){
+  S.shot=sh;S.t=0;S.crash=null;S.ceiling=false;SC=newScore();
+  car.s=pickStart(sh);carPose(car);car.smYaw=car.yaw;car.v=Math.min(shotSpeed(sh,0,0),VLIM[ridx(car.s)]);
+  if(sh.id==='flyby'){
+    const c={s:car.s,v:car.v,x:0,y:0,z:0,yaw:car.yaw,smYaw:car.yaw,pitch:0};
+    for(let t=0;t<sh.dur/2;t+=1/60)carStep(c,1/60,sh.speed(t/sh.dur));
+    const f={x:-Math.sin(c.yaw),z:-Math.cos(c.yaw)},y2=c.yaw+75*DEG;
+    S.fly={Q:new THREE.Vector3(c.x+f.x*25,c.y,c.z+f.z*25),D:new THREE.Vector3(-Math.sin(y2),0,-Math.cos(y2))};
+  }
+  S.clearY=0;Vp.set(0,0,0);
+  pathPoint(0,P,1);
+  // Starting velocity of the mark: step a copy of the car forward 0.1 s
+  const save={s:car.s,v:car.v,x:car.x,z:car.z,yaw:car.yaw,smYaw:car.smYaw};
+  carStep(car,.1,shotSpeed(sh,0,0));rawPath(.1,_v);Object.assign(car,save);
+  rawPath(0,_w);Vp.copy(_v).sub(_w).multiplyScalar(10);Vprev.copy(Vp);Ap.set(0,0,0);Pprev.copy(P);
+  pathPoint(0,P,1);
+  drone.pos.copy(P);drone.vel.copy(Vp);drone.acc.set(0,0,0);drone.visPitch=drone.visRoll=0;drone.yawRate=0;
+  const hs=Math.hypot(Vp.x,Vp.z);drone.yaw=hs>3?Math.atan2(-Vp.x,-Vp.z):Math.atan2(-(car.x-P.x),-(car.z-P.z));
+  placeCameras();aimAngles(sh.frame.tx,sh.frame.ty,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;gim.panRate=gim.tiltRate=gim.prevW=gim.prevT=0;resetRel();
+  placeCameras();placeCarMesh(0);
+  const {pilotHuman}=seats();ghost.visible=pilotHuman&&sh.tolM>0;ghost.position.copy(P);ghost.userData.shell.scale.setScalar(sh.tolM||1);
+}
+// Peak ground speed the move asks of the aircraft, from a quick 10 Hz dry run.
+const reqCache={};
+function requiredSpeed(sh){
+  if(reqCache[sh.id]!=null)return reqCache[sh.id];
+  const save=Object.assign({},car),a=new THREE.Vector3(),b=new THREE.Vector3();let max=0;
+  car.s=pickStart(sh);carPose(car);car.smYaw=car.yaw;car.v=Math.min(shotSpeed(sh,0,0),VLIM[ridx(car.s)]);rawPath(0,a);
+  for(let t=.1;t<=sh.dur;t+=.1){carStep(car,.1,shotSpeed(sh,t/sh.dur,t));rawPath(t,b);max=Math.max(max,Math.hypot(b.x-a.x,b.z-a.z)/.1);a.copy(b);}
+  Object.assign(car,save);return reqCache[sh.id]=max;
+}
+function openBrief(sh){
+  S.mode='brief';setLens(sh.lens);prepareRun(sh);
+  S.modeNote='';
+  if(seats().pilotHuman){const need=requiredSpeed(sh);
+    if(need>flightProf().vmax*.9){const m=need<settings.flightProfiles.N.vmax*.9?'N':'S';
+      if(m!==settings.flightMode){settings.flightMode=m;saveSettings();S.modeNote='Switched to '+m+' mode: this move needs about '+fmtSpd(need)+'.';}}}
+  const takes=store.get('takes',{});S.take=(takes[sh.id+':'+S.role]||0)+1;
+  renderBrief();showOverlay('brief');$('#bStart').focus();applyRoleView();
+}
+function roll(){
+  if(S.mode!=='brief'&&S.mode!=='results'&&S.mode!=='paused')return;
+  const sh=S.shot;
+  if(S.mode!=='brief'){const keepLens=S.lensId,keepF=S.focal;prepareRun(sh);setLens(keepLens,keepF);
+    const takes=store.get('takes',{});S.take=(takes[sh.id+':'+S.role]||0)+1;}
+  const takes=store.get('takes',{});takes[sh.id+':'+S.role]=S.take;store.set('takes',takes);
+  showOverlay(null);S.mode='count';S.cd=3.4;applyRoleView();
+}
+function startSandbox(){
+  S.shot=SANDBOX;S.mode='sandbox';S.t=0;S.crash=null;SC=newScore();ghost.visible=false;
+  if(!lensById(S.lensId))setLens('35');
+  car.v=S.sandSpeed;resetDroneBehindCar();showOverlay(null);applyRoleView();$('#sbLens').value=S.lensId;
+}
+function finish(){
+  stopRecord(false);S.mode='results';S.result=computeResults();
+  if(!S.crash){const best=store.get('best',{}),k=S.shot.id+':'+S.role;if(!(best[k]>=S.result.score)){best[k]=S.result.score;store.set('best',best);S.result.pb=true;}}
+  renderResults();showOverlay('results');$('#rRetry').focus();
+}
+function crash(why){if(S.mode==='sandbox'){toast('Crashed: '+why+'. Resetting behind the car.');resetDroneBehindCar();return;}S.crash=why;finish();}
+function pause(){if(S.mode==='paused')return;S.pausedFrom=S.mode;S.mode='paused';showOverlay('pause');$('#pResume').focus();}
+function resume(){if(S.mode!=='paused')return;S.mode=S.pausedFrom==='count'?'count':S.pausedFrom;showOverlay(null);}
+function goHome(){stopRecord(false);S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
+function confirmAction(){if(S.mode==='brief'||S.mode==='results')roll();else if(S.mode==='paused')resume();}
+
+/* ---------- Move recording (sandbox) ---------- */
+const rec={on:false,t:0,acc:0,startS:0,rel:[],world:[],spd:[],ndc:[]};
+function startRecord(){
+  if(S.mode!=='sandbox')return;
+  if(!seats().pilotHuman){toast('Recording needs a human pilot. Switch to the Pilot or Dual seat.');return;}
+  Object.assign(rec,{on:true,t:0,acc:0,startS:car.s,rel:[],world:[],spd:[],ndc:[]});recSample();
+  $('#recMove').hidden=false;$('#btnRec').textContent='Stop recording';$('#btnRec').classList.add('rec-on');
+}
+function recSample(){
+  setCtx();const dx=drone.pos.x-ctx.p.x,dz=drone.pos.z-ctx.p.z,cm=v=>Math.round(v*100)/100;
+  rec.rel.push([cm(dx*ctx.f.x+dz*ctx.f.z),cm(dx*ctx.r.x+dz*ctx.r.z),cm(drone.pos.y-car.y)]);
+  rec.world.push([cm(drone.pos.x),cm(drone.pos.y),cm(drone.pos.z)]);rec.spd.push(Math.round(car.v*10)/10);
+  if(seats().camHuman){const z=frameZone();if(z.zone!=='lost')rec.ndc.push([z.x,z.y]);}
+}
+function recStep(dt){if(!rec.on)return;rec.t+=dt;rec.acc+=dt;while(rec.acc>=.1){rec.acc-=.1;recSample();}$('#recT').textContent=rec.t.toFixed(1);if(rec.t>=120)stopRecord(true);}
+function stopRecord(save){
+  if(!rec.on)return;rec.on=false;$('#recMove').hidden=true;$('#btnRec').textContent='Record move';$('#btnRec').classList.remove('rec-on');
+  if(!save)return;
+  if(rec.rel.length<30){toast('That move was under 3 seconds. Record a longer one.');return;}
+  pause();showOverlay('saveShot');renderSaveShot();
+}
+
+/* ---------- Main step ---------- */
+function stepWorld(dt){
+  const sh=S.shot,demo=S.mode==='home',sand=S.mode==='sandbox';
+  S.t+=dt;const t=S.t,u=sh.dur===Infinity?0:clamp(t/sh.dur,0,1);
+  const spd=demo?15:sand?(S.carStopped?0:S.sandSpeed):shotSpeed(sh,u,t);
+  carStep(car,dt,spd);placeCarMesh(dt);
+  const st=seats(),pilotHuman=!demo&&st.pilotHuman,camHuman=!demo&&st.camHuman;
+  if(!(sand&&pilotHuman)){
+    pathPoint(t,P,dt);
+    Vp.lerp(_v.copy(P).sub(Pprev).divideScalar(Math.max(dt,1e-3)),.25);Pprev.copy(P);
+    Ap.lerp(_w.copy(Vp).sub(Vprev).divideScalar(Math.max(dt,1e-3)),.15);Vprev.copy(Vp);
+  }
+  const yaw0=drone.yaw;
+  if(pilotHuman)pilotStep(dt,input.pil);else autoStep(dt);
+  droneVisual(dt);
+  const dyaw=wrapPi(drone.yaw-yaw0);
+  camMain.position.copy(drone.pos).y-=.4;
+  if(camHuman)gimbalStep(dt,input.cam,dyaw);else autoCamStep(dt);
+  panLimit();
+  placeCameras();
+  if(ghost.visible){ghost.position.copy(P);ghost.rotation.y+=dt;}
+  if(pilotHuman){
+    const gh=terrainH(drone.pos.x,drone.pos.z);
+    if(drone.pos.y<gh+.6)crash('ground contact');
+    else if(treeHit(drone.pos))crash('hit a tree');
+    else if(Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z)<2.6)crash('contact with the car');
+  }
+  if(!demo&&S.mode!=='results')scoreStep(dt);
+  if(rec.on)recStep(dt);
+  if(S.mode==='run'&&t>=sh.dur)finish();
+}
+function update(dt){
+  pollInput(dt);calibStep(dt);
+  if(S.mode==='home'||S.mode==='run'||S.mode==='sandbox')stepWorld(dt);
+  else if(S.mode==='count'){S.cd-=dt;if(S.cd<=0){S.mode='run';S.t=0;}}
+}
+
+/* ---------- HUD ---------- */
+const imperial=()=>settings.units==='imperial';
+const fmtLen=m=>imperial()?Math.round(m*3.28084)+' ft':Math.round(m)+' m';
+const fmtSpd=ms=>imperial()?Math.round(ms*2.23694)+' mph':Math.round(ms*3.6)+' km/h';
+const sgn=(v,d=0)=>(v>=0?'+':'−')+Math.abs(v).toFixed(d);
+function timecode(t){const f=Math.floor(t*24),p=n=>String(n).padStart(2,'0');return p(Math.floor(f/86400))+':'+p(Math.floor(f/1440)%60)+':'+p(Math.floor(f/24)%60)+':'+p(f%24);}
+let hudTick=0,warnText='';
+const el={rec:$('#rec'),tc:$('#tc'),lensTag:$('#lensTag'),pan:$('#panGauge i'),panB:$('#panGauge b'),tilt:$('#tiltGauge i'),tiltB:$('#tiltGauge b'),
+  ring:$('#ring'),zone:$('#zone'),tele:$('#tele'),prog:$('#progress i'),count:$('#count'),warn:$('#warn'),pi:$('#pilotInfo'),pi2:$('#pilotInfo2'),
+  liveRows:$('#liveRows'),slate:$('#slate'),frame:$('#frame')};
+function hud(){
+  const sh=S.shot,running=S.mode==='run',st=seats();
+  el.rec.textContent=running?'REC':S.mode==='sandbox'?'LIVE':'STBY';el.rec.className='rec'+(running?' live':'');
+  el.tc.textContent=timecode(running||S.mode==='sandbox'?S.t:0);
+  el.lensTag.textContent=Math.round(S.focal)+'mm';
+  const rel=gim.rel/DEG;el.pan.style.left=(50-rel/(2*SPEC.panLimit)*100)+'%';el.panB.textContent='PAN '+sgn(-rel)+'°';
+  const td=gim.tilt/DEG,span=SPEC.tiltMax-SPEC.tiltMin;el.tilt.style.top=((SPEC.tiltMax-td)/span*100)+'%';el.tiltB.style.top=((SPEC.tiltMax-td)/span*100)+'%';el.tiltB.textContent=sgn(td,1)+'°';
+  // Target ring
+  if(mainRect.h){const f=sh.frame;el.ring.style.left=((f.tx+1)/2*mainRect.w)+'px';el.ring.style.top=((1-f.ty)/2*mainRect.h)+'px';const d=f.tol*mainRect.h;el.ring.style.width=el.ring.style.height=d+'px';}
+  const showZone=(running||S.mode==='sandbox')&&st.camHuman;
+  el.ring.classList.toggle('on',showZone&&SC.cam.zone==='on');
+  el.zone.className='zone'+(showZone?' '+SC.cam.zone:'');
+  el.zone.textContent=showZone?({on:'On the mark',near:'Close',framed:'Off the mark',lost:'Subject lost'})[SC.cam.zone]||'':'';
+  const gh=terrainH(drone.pos.x,drone.pos.z),dc=Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z),hs=Math.hypot(drone.vel.x,drone.vel.z);
+  if(++hudTick%3===0){
+    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO')+'</span><span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'');
+    // Pilot's mark readout
+    let pt='';
+    if(st.pilotHuman&&sh.tolM>0&&(running||S.mode==='count'||S.mode==='brief')){
+      const dx=P.x-drone.pos.x,dz=P.z-drone.pos.z,dy=P.y-drone.pos.y,brg=wrapPi(Math.atan2(-dx,-dz)-drone.yaw)/DEG,dist=Math.hypot(dx,dy,dz);
+      pt='MARK '+fmtLen(dist)+' · '+(Math.abs(brg)<8?'ahead':Math.abs(brg)>150?'behind':Math.round(Math.abs(brg))+'° '+(brg>0?'left':'right'))+' · '+(Math.abs(dy)<1.5?'level':fmtLen(Math.abs(dy))+(dy>0?' up':' down'));
+      el.pi.classList.toggle('good',dist<sh.tolM);el.pi2.classList.toggle('good',dist<sh.tolM);
+    }
+    el.pi.textContent=S.swap&&!S.split?pt:'';el.pi2.textContent=S.split?pt:'';
+    renderLive();drawSticks();
+  }
+  const prog=running&&sh.dur!==Infinity?S.t/sh.dur:0;el.prog.style.width=(prog*100)+'%';
+  // Countdown
+  if(S.mode==='count'){el.count.hidden=false;el.count.textContent=S.cd>1?String(Math.ceil(S.cd-1)):'Action';}
+  else el.count.hidden=true;
+  // Warnings
+  let w='';
+  if(st.pilotHuman&&S.mode!=='home'){if(dc<8)w='Too close to the car';else if(S.ceiling)w='Altitude limit: 400 ft AGL';else if(drone.pos.y-gh<4)w='Low altitude';}
+  if(!w&&st.camHuman&&S.panLimited&&S.mode!=='home')w='Gimbal pan limit';
+  if(w!==warnText){warnText=w;el.warn.hidden=!w;el.warn.textContent=w;}
+  // Slate
+  const seat={camera:'CAMERA OP',pilot:'PILOT',dual:'DUAL'}[S.role];
+  el.slate.textContent=S.mode==='home'?'STANDBY · choose a seat and a shot':S.mode==='sandbox'||sh.id==='sandbox'?'SANDBOX · '+seat+' · '+Math.round(S.focal)+'mm':
+    'SHOT '+shotNo(sh)+' · '+sh.name.toUpperCase()+' · TAKE '+S.take+' · '+seat+' · '+Math.round(S.focal)+'mm';
+}
+const shotNo=sh=>sh.custom?'C'+String(myShots.indexOf(sh)+1).padStart(2,'0'):String(sh.no).padStart(2,'0');
+function renderLive(){
+  const st=seats(),T=Math.max(SC.time,.001),rows=[];
+  const active=S.mode==='run'||S.mode==='sandbox';
+  if(st.camHuman){rows.push(['Framing',active?Math.round(SC.cam.pts/T*100)+'%':'—']);rows.push(['On the mark',active?Math.round(SC.cam.on/T*100)+'%':'—']);rows.push(['Subject lost',SC.cam.lost]);}
+  if(st.pilotHuman&&S.shot.tolM>0){rows.push(['Line',active?Math.round(SC.pil.pts/T*100)+'%':'—']);}
+  if(st.pilotHuman)rows.push(['Too close',SC.pil.close]);
+  rows.push(['Pilot input',seatDev.pilot?seatDev.pilot.label:'Keyboard']);
+  rows.push(['Camera input',seatDev.camera?seatDev.camera.label:'Keyboard / mouse']);
+  if(S.role==='camera')rows.splice(rows.length-2,1);if(S.role==='pilot')rows.pop();
+  const html=rows.map(r=>'<div class="lrow"><span>'+r[0]+'</span><b>'+esc(String(r[1]))+'</b></div>').join('');
+  if(html!==el.liveRows._h){el.liveRows.innerHTML=html;el.liveRows._h=html;}
+}
+const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+function drawStick(g,cx,cy,r,x,y,on){g.strokeStyle=on?'#5b666c':'#2f373b';g.lineWidth=1;g.strokeRect(cx-r,cy-r,r*2,r*2);g.beginPath();g.moveTo(cx-r,cy);g.lineTo(cx+r,cy);g.moveTo(cx,cy-r);g.lineTo(cx,cy+r);g.stroke();
+  g.fillStyle=on?'#e5402c':'#444c50';g.beginPath();g.arc(cx+x*r,cy-y*r,5,0,TAU);g.fill();}
+function drawSticks(){
+  const st=seats();
+  const a=$('#stCam').getContext('2d');a.clearRect(0,0,160,80);
+  if(settings.camLayout==='split'){drawStick(a,40,40,30,input.cam.pan,0,st.camHuman);drawStick(a,120,40,30,0,input.cam.tilt,st.camHuman);}
+  else drawStick(a,120,40,30,input.cam.pan,input.cam.tilt,st.camHuman);
+  const b=$('#stPil').getContext('2d');b.clearRect(0,0,160,80);drawStick(b,40,40,30,input.pil.yaw,input.pil.thr,st.pilotHuman);drawStick(b,120,40,30,input.pil.roll,input.pil.pitch,st.pilotHuman);
+}
+
+/* ---------- Map ---------- */
+const mapCv=$('#map'),mapG=mapCv.getContext('2d');
+function drawMap(){
+  const w=mapCv.width,h=mapCv.height;if(!w||!h)return;const g=mapG,dpr=Math.min(window.devicePixelRatio||1,2);
+  g.fillStyle='#10171a';g.fillRect(0,0,w,h);
+  const span=Math.max(140,Math.hypot(drone.pos.x-car.x,drone.pos.z-car.z)*.75+70);
+  const k=Math.min(w,h)/2/span,cx=(car.x+drone.pos.x)/2,cz=(car.z+drone.pos.z)/2,X=x=>(x-cx)*k+w/2,Y=z=>(z-cz)*k+h/2;
+  if(world.mini){const m=world.mini;g.globalAlpha=.85;g.drawImage(m,X(world.TC.x-world.hx),Y(world.TC.z-world.hz),2*world.hx*k,2*world.hz*k);g.globalAlpha=1;}
+  else{g.fillStyle='#1e3326';for(const t of trees){const x=X(t.x),y=Y(t.z);if(x>-4&&x<w+4&&y>-4&&y<h+4){g.beginPath();g.arc(x,y,Math.max(1.2,t.r*k),0,TAU);g.fill();}}}
+  g.strokeStyle='#4a5357';g.lineWidth=Math.max(2,ROAD_W*k);g.lineJoin='round';g.beginPath();
+  for(let i=0;i<=ROAD_N;i+=3){const j=i%ROAD_N;i?g.lineTo(X(RX[j]),Y(RZ[j])):g.moveTo(X(RX[j]),Y(RZ[j]));}g.closePath();g.stroke();
+  if(ghost.visible){g.strokeStyle='#62d08b';g.lineWidth=1.5*dpr;g.beginPath();g.arc(X(P.x),Y(P.z),Math.max(4*dpr,S.shot.tolM*k),0,TAU);g.stroke();}
+  // camera wedge
+  const hf=hfovOf(S.focal),len=Math.min(span*1.4,400),dx=X(drone.pos.x),dy=Y(drone.pos.z);
+  g.fillStyle='rgba(244,241,234,.13)';g.beginPath();g.moveTo(dx,dy);
+  for(const a of [gim.pan+hf/2,gim.pan-hf/2])g.lineTo(X(drone.pos.x-Math.sin(a)*len),Y(drone.pos.z-Math.cos(a)*len));g.closePath();g.fill();
+  // car
+  g.save();g.translate(X(car.x),Y(car.z));g.rotate(-car.yaw);const cl=Math.max(7*dpr,4.6*k),cw=Math.max(4*dpr,1.9*k);
+  g.fillStyle='#f4f1ea';g.fillRect(-cw/2,-cl/2,cw,cl);g.fillStyle='#a8261c';g.fillRect(-cw/2,-cl/2,cw,cl*.25);g.restore();
+  // aircraft
+  g.save();g.translate(dx,dy);g.rotate(-drone.yaw);g.fillStyle='#e5402c';g.beginPath();const s=7*dpr;g.moveTo(0,-s);g.lineTo(s*.75,s*.7);g.lineTo(0,s*.35);g.lineTo(-s*.75,s*.7);g.closePath();g.fill();g.restore();
+  // scale bar
+  const unit=imperial()?{m:30.48*(span>220?5:2),t:(span>220?500:200)+' ft'}:{m:span>220?150:50,t:(span>220?150:50)+' m'};
+  g.strokeStyle='#959b99';g.fillStyle='#959b99';g.lineWidth=1*dpr;const bx=8*dpr,by=h-10*dpr;g.beginPath();g.moveTo(bx,by);g.lineTo(bx+unit.m*k,by);g.stroke();
+  g.font=(10*dpr)+'px IBM Plex Mono, monospace';g.fillText(unit.t,bx,by-4*dpr);
+}
+
+/* ---------- Layout and render ---------- */
+let W=1,H=1,mainRect={x:0,y:0,w:0,h:0},fpvRect={x:0,y:0,w:0,h:0};
+function applyRoleView(){
+  S.split=S.role==='dual'&&S.mode!=='home';S.swap=S.role==='pilot'&&S.mode!=='home'?(S.swapPref!=null?S.swapPref:true):(S.swapPref&&S.role!=='dual'?true:false);
+  if(S.mode==='home')S.swap=false;
+  app.classList.toggle('split',S.split);app.classList.toggle('fpvmain',S.swap&&!S.split);
+  $('#fpvLabel').textContent=S.swap?'CAM · X9':'FPV · PILOT';
+  $('#sandTools').hidden=S.mode!=='sandbox'&&!(S.mode==='paused'&&S.pausedFrom==='sandbox');
+  $('#liveTitle').textContent=S.mode==='sandbox'?'Sandbox':'Live take';
+  $('#stCamLab').textContent=S.role==='pilot'?'CAMERA · AI OP':'CAMERA';$('#stPilLab').textContent=S.role==='camera'?'PILOT · AUTO':'PILOT';
+  layout();
+}
+function layout(){
+  const ar=app.getBoundingClientRect();W=Math.max(1,ar.width);H=Math.max(1,ar.height);
+  renderer.setSize(W,H,false);
+  app.style.setProperty('--top-h',$('#top').offsetHeight+'px');
+  const ms=$('#mainSlot').getBoundingClientRect(),mx=ms.left-ar.left,my=ms.top-ar.top;
+  if(S.split){const gap=6;let w=Math.min((ms.width-gap)/2,ms.height*16/9),h=w*9/16;const x0=(ms.width-(2*w+gap))/2,y0=(ms.height-h)/2;
+    fpvRect={x:mx+x0,y:my+y0,w,h};mainRect={x:mx+x0+w+gap,y:my+y0,w,h};}
+  else{let w=ms.width,h=w*9/16;if(h>ms.height){h=ms.height;w=h*16/9;}mainRect={x:mx+(ms.width-w)/2,y:my+(ms.height-h)/2,w,h};
+    const fs=$('#fpvSlot').getBoundingClientRect();fpvRect={x:fs.left-ar.left+1,y:fs.top-ar.top+1,w:Math.max(0,fs.width-2),h:Math.max(0,fs.height-2)};}
+  const fr=el.frame;fr.style.left=(mainRect.x-mx)+'px';fr.style.top=(mainRect.y-my)+'px';fr.style.width=mainRect.w+'px';fr.style.height=mainRect.h+'px';
+  const fh=$('#fpvHud');fh.style.left=(fpvRect.x-mx)+'px';fh.style.top=(fpvRect.y-my)+'px';fh.style.width=fpvRect.w+'px';fh.style.height=fpvRect.h+'px';
+  $('#tiltGauge').style.setProperty('--zero',(SPEC.tiltMax/(SPEC.tiltMax-SPEC.tiltMin)*100)+'%');
+  const mr=$('#mapSlot').getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);mapCv.width=Math.round(mr.width*dpr);mapCv.height=Math.round(mr.height*dpr);
+}
+new ResizeObserver(()=>layout()).observe(app);
+window.addEventListener('resize',layout);
+function view(cam,r){
+  if(r.w<2||r.h<2)return;
+  cam.aspect=r.w/r.h;cam.updateProjectionMatrix();sky.position.copy(cam.position);
+  const y=H-r.y-r.h;renderer.setViewport(r.x,y,r.w,r.h);renderer.setScissor(r.x,y,r.w,r.h);renderer.render(scene,cam);
+}
+function render(){
+  sun.position.set(car.x+SUN_DIR.x*400,car.y+SUN_DIR.y*400,car.z+SUN_DIR.z*400);sun.target.position.set(car.x,car.y,car.z);sun.target.updateMatrixWorld();
+  renderer.setScissorTest(true);renderer.setViewport(0,0,W,H);renderer.setScissor(0,0,W,H);renderer.setClearColor(0x0c0e0f);renderer.clear();
+  renderer.setClearColor(HORIZON);
+  renderer.shadowMap.needsUpdate=true;
+  const mainCam=S.swap&&!S.split?camFPV:camMain,sideCam=mainCam===camMain?camFPV:camMain;
+  view(mainCam,mainRect);view(sideCam,fpvRect);
+  drawMap();
+}
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(.05,Math.max(.001,(now-last)/1000));last=now;
+  try{update(dt);hud();render();}catch(e){console.error(e);}
+  requestAnimationFrame(loop);
+}
+
+/* ---------- Overlays and panels ---------- */
+const OVERLAYS=['home','brief','results','pause','saveShot','mapMaker'];
+function showOverlay(id){for(const o of OVERLAYS)$('#'+o).hidden=o!==id;}
+let toastT=0;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,4200);}
+const pips=d=>'<span class="pips" aria-label="Difficulty '+d+' of 4">'+'●'.repeat(d)+'<s>'+'●'.repeat(4-d)+'</s></span>';
+function bestLine(id){const b=store.get('best',{})[id+':'+S.role];return b==null?'<span>No takes yet</span>':'<span>Best ('+({camera:'camera op',pilot:'pilot',dual:'dual'})[S.role]+')</span><b>'+b+' · '+grade(b)+'</b>';}
+function shotCard(sh){
+  const L=lensById(sh.lens),spd=sh.custom?sh.spd.reduce((a,b)=>a+b,0)/sh.spd.length:(()=>{let a=0;for(let k=0;k<=10;k++)a+=sh.speed(k/10)/11;return a;})();
+  return '<button class="shot" type="button" data-shot="'+sh.id+'"><div class="shot-top"><span>SHOT '+shotNo(sh)+'</span>'+(sh.custom?'<span>CUSTOM · '+(sh.ref==='world'?'FIXED LINE':'CAR-RELATIVE')+'</span>':pips(sh.diff))+'</div>'+
+    '<h4>'+esc(sh.name)+'</h4><p>'+esc(sh.brief||'Recorded move.')+'</p>'+
+    '<div class="specs"><span>Lens <b>'+esc(L.label.replace(/^DL\s*/,''))+'</b></span><span>Car <b>~'+fmtSpd(spd)+'</b></span><span>Length <b>'+Math.round(sh.dur)+' s</b></span></div>'+
+    '<div class="best">'+bestLine(sh.id)+'</div></button>';
+}
+function renderHome(){
+  document.querySelectorAll('.role').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.role===S.role)));
+  $('#shotGrid').innerHTML='<button class="shot sandbox" type="button" data-shot="sandbox"><div class="shot-top"><span>SANDBOX</span><span>NO CLOCK</span></div><h4>Free Fly</h4><p>'+esc(SANDBOX.brief)+'</p><div class="specs"><span>Lens <b>any</b></span><span>Car <b>you set it</b></span></div><div class="best"><span>Record moves here</span><b>M</b></div></button>'+BUILTIN.map(shotCard).join('');
+  renderLocations();
+  const here=shotsHere(),away=myShots.length-here.length;
+  $('#myGrid').innerHTML=here.length?here.map(shotCard).join('')+(away?'<p class="hint" style="grid-column:1/-1">'+away+' more recorded at other locations.</p>':''):'<p class="muted" style="grid-column:1/-1">No custom shots yet. Open the Free Fly sandbox in the Pilot or Dual seat, start the car, press <b>Record move</b>, fly the shot, and save it. It shows up here for any seat and can be sent to trainees as a shot pack.</p>';
+  renderPadStatus();
+}
+function renderPadStatus(){
+  const d=lastDevs,parts=[];
+  if(padBlocked)parts.push('<b>Game controllers are blocked in this viewer.</b> Open the standalone file to use one.');
+  else if(!d.length)parts.push('No controller seen yet. Move a stick or press a button to wake it. Keyboard and mouse work now.');
+  else parts.push(d.map((x,i)=>'Controller '+(i+1)+': <b>'+esc(x.label)+'</b>'+(x.kind==='generic'&&!bind.calib.camera[x.ckey]&&!bind.calib.pilot[x.ckey]?' (run stick setup)':'')).join(' · '));
+  const h=parts.join(' ');if($('#padStatus')._h!==h){$('#padStatus').innerHTML=h;$('#padStatus')._h=h;}
+}
+function drawDiagram(cv,f){
+  const g=cv.getContext('2d'),w=cv.width,h=cv.height;g.fillStyle='#0f1214';g.fillRect(0,0,w,h);
+  g.strokeStyle='rgba(255,255,255,.22)';g.lineWidth=1;g.beginPath();for(const a of [1/3,2/3]){g.moveTo(w*a,0);g.lineTo(w*a,h);g.moveTo(0,h*a);g.lineTo(w,h*a);}g.stroke();
+  const x=(f.tx+1)/2*w,y=(1-f.ty)/2*h;g.setLineDash([5,4]);g.strokeStyle='#62d08b';g.lineWidth=2;g.beginPath();g.arc(x,y,f.tol*h/2,0,TAU);g.stroke();g.setLineDash([]);
+  g.fillStyle='#a8261c';g.fillRect(x-14,y-5,28,10);g.fillStyle='#26313b';g.fillRect(x-8,y-10,16,6);
+}
+function seatOptions(sel,seat){
+  const opts=['<option value="">Automatic</option>','<option value="kb">Keyboard and mouse</option>'].concat(lastDevs.map(d=>'<option value="'+d.key+'">'+esc(d.label)+'</option>'));
+  sel.innerHTML=opts.join('');sel.value=bind[seat]||'';if(sel.value!==(bind[seat]||''))sel.value='';
+}
+function renderBrief(){
+  const sh=S.shot;$('#bSlate').textContent='SHOT '+shotNo(sh)+' · TAKE '+S.take;$('#bName').textContent=sh.name;$('#bBrief').textContent=sh.brief||'Recorded move.';
+  $('#bRole').textContent=({camera:'Camera op. The autopilot flies the move; you run pan and tilt on the lens you pick. Graded on framing and smoothness.',
+    pilot:'Pilot. Fly the green mark on your FPV feed; an AI op frames the car. Graded on holding the line, smoothness and keeping 25 ft off the car.',
+    dual:'Dual. Pilot flies the green mark on the left feed, camera op frames on the right. Both are graded.'})[S.role];
+  drawDiagram($('#bDiagram'),sh.frame);
+  $('#bLens').innerHTML=LENSES.map(l=>'<option value="'+l.id+'">'+l.label+(l.id===sh.lens?' (called for)':'')+'</option>').join('');$('#bLens').value=S.lensId;
+  const sv=seatDev;
+  $('#bSeats').innerHTML='<span>Controllers</span><span class="hint">Pilot: '+esc(S.role==='camera'?'autopilot':sv.pilot?sv.pilot.label:'keyboard')+'<br>Camera: '+esc(S.role==='pilot'?'AI op':sv.camera?sv.camera.label:'keyboard / mouse')+'</span><button class="btn small" type="button" id="bSwapDev"'+(S.role==='dual'?'':' hidden')+'>Swap controllers</button>';
+  const sw=$('#bSwapDev');if(sw)sw.onclick=()=>{const p=seatDev.pilot,c=seatDev.camera;bind.pilot=c?c.key:'kb';bind.camera=p?p.key:'kb';saveBind();pollInput(0);renderBrief();};
+  if(S.role!=='camera'){
+    $('#bSeats').insertAdjacentHTML('beforeend','<label class="field" for="bMode"><span>Flight mode</span><select id="bMode">'+FLIGHT_MODES.map(m=>'<option value="'+m.id+'">'+m.label+'</option>').join('')+'</select></label>'+(S.modeNote?'<span class="hint">'+esc(S.modeNote)+'</span>':''));
+    $('#bMode').value=settings.flightMode;$('#bMode').onchange=e=>{settings.flightMode=e.target.value;saveSettings();};
+  }
+  $('#bDelete').hidden=!sh.custom;
+}
+function renderResults(){
+  const r=S.result,sh=S.shot;
+  $('#rSlate').textContent='SHOT '+shotNo(sh)+' · '+sh.name.toUpperCase()+' · TAKE '+S.take+' · '+Math.round(S.focal)+'mm';
+  $('#rGrade').textContent=r.grade==='X'?'—':r.grade;$('#rScore').textContent=r.score+(r.pb?' · new best':'');$('#rNote').textContent=r.note;
+  const stat=(k,v)=>'<div class="stat"><span>'+k+'</span><b>'+v+'</b></div>',rows=[];
+  if(r.cam){if(r.pil)rows.push('<div class="stat seat">Camera op · '+Math.round(r.cam.score)+'</div>');
+    rows.push(stat('Framing',Math.round(r.cam.framing)+'%'),stat('On the mark',Math.round(r.cam.on)+'%'),stat('Smoothness',Math.round(r.cam.smooth)+'%'),stat('Subject lost',r.cam.lost));}
+  if(r.pil){if(r.cam)rows.push('<div class="stat seat">Pilot · '+Math.round(r.pil.score)+'</div>');
+    rows.push(stat('Line',Math.round(r.pil.line)+'%'),stat('On the mark',Math.round(r.pil.on)+'%'),stat('Smoothness',Math.round(r.pil.smooth)+'%'),stat('Too close',r.pil.close));}
+  $('#rRows').innerHTML=rows.join('');
+  const cv=$('#rTrack'),g=cv.getContext('2d'),n=Math.max(1,SC.track.length),lanes=(r.cam?1:0)+(r.pil?1:0),lh=(cv.height-4*(lanes-1))/lanes;
+  g.clearRect(0,0,cv.width,cv.height);const col=['#20282b','#62d08b','#f0b13c','#57605f','#ff5b4b'];
+  SC.track.forEach((s,i)=>{const x=i/n*cv.width,w=Math.ceil(cv.width/n)+1;let lane=0;
+    if(r.cam){g.fillStyle=col[s[0]];g.fillRect(x,0,w,lh);lane=1;}
+    if(r.pil){g.fillStyle=s[1]===3?'#57605f':col[s[1]];g.fillRect(x,lane*(lh+4),w,lh);}});
+  if(S.crash){g.fillStyle='#ff5b4b';g.fillRect(cv.width-4,0,4,cv.height);}
+  const seat={camera:'Camera op',pilot:'Pilot',dual:'Dual'}[S.role],lines=['Dual-Op Trainer · Shot '+shotNo(sh)+' '+sh.name+' · Take '+S.take,'Seat: '+seat+' · Lens '+Math.round(S.focal)+'mm · Gimbal '+settings.gimbalMode+', profile '+(settings.gimbalProfile+1)+' ('+gimbalProf().name+') · Flight mode '+settings.flightMode+(world.base!=null?' · Map '+world.name:''),
+    'Score '+r.score+(r.grade==='X'?' (crash: '+S.crash+')':' ('+r.grade+') — '+r.note)];
+  if(r.cam)lines.push('Camera: framing '+Math.round(r.cam.framing)+'%, on the mark '+Math.round(r.cam.on)+'%, smooth '+Math.round(r.cam.smooth)+'%, lost '+r.cam.lost);
+  if(r.pil)lines.push('Pilot: line '+Math.round(r.pil.line)+'%, on the mark '+Math.round(r.pil.on)+'%, smooth '+Math.round(r.pil.smooth)+'%, too close '+r.pil.close);
+  lines.push(new Date().toISOString().slice(0,10));$('#rText').value=lines.join('\n');$('#rText').hidden=true;
+  const all=allShots(),i=all.indexOf(sh);$('#rNext').hidden=i<0||i>=all.length-1;
+}
+async function copyText(text,area){
+  try{await navigator.clipboard.writeText(text);toast('Copied.');}
+  catch(e){area.hidden=false;area.value=text;area.focus();area.select();toast('Select-all is done. Press Cmd+C or Ctrl+C to copy.');}
+}
+function renderSaveShot(){
+  const n=rec.rel.length,dur=(n-1)/10,avg=rec.spd.reduce((a,b)=>a+b,0)/n;
+  $('#sSummary').textContent=dur.toFixed(1)+' s move, car averaging '+fmtSpd(avg)+'. Saved shots replay on the same stretch of road at the same car speeds.';
+  $('#sName').value='Custom move '+(myShots.length+1);$('#sBrief').value='';
+  $('#sLens').innerHTML=LENSES.map(l=>'<option value="'+l.id+'">'+l.label+'</option>').join('');$('#sLens').value=S.lensId;
+  let opts=FRAMINGS.map(f=>'<option value="'+f.id+'">'+f.name+'</option>');
+  if(rec.ndc.length>20)opts.unshift('<option value="flown">As framed while recording</option>');
+  $('#sFrame').innerHTML=opts.join('');$('#sFrame').value=rec.ndc.length>20?'flown':'c';$('#sName').focus();$('#sName').select();
+}
+function saveRecordedShot(){
+  let fr;const sel=$('#sFrame').value,tol=parseFloat($('#sTol').value);
+  if(sel==='flown'){let x=0,y=0;for(const p of rec.ndc){x+=p[0];y+=p[1];}fr={tx:Math.round(x/rec.ndc.length*100)/100,ty:Math.round(y/rec.ndc.length*100)/100,tol};}
+  else{const f=FRAMINGS.find(f=>f.id===sel)||FRAMINGS[0];fr={tx:f.tx,ty:f.ty,tol};}
+  const ref=$('#sRef').value,sh={id:'u'+Date.now().toString(36),custom:true,name:($('#sName').value||'Custom move').trim().slice(0,40),brief:$('#sBrief').value.trim().slice(0,140),
+    ref,world:world.id,lens:$('#sLens').value,frame:fr,tolM:6,dur:Math.round((rec.rel.length-1))/10,startS:Math.round(rec.startS*10)/10,pts:ref==='world'?rec.world.slice():rec.rel.slice(),spd:rec.spd.slice(),diff:0};
+  myShots.push(sh);store.set('myShots',myShots);toast('Saved "'+sh.name+'" to Your shots.');
+  showOverlay(null);S.mode='sandbox';
+}
+function exportShots(list){const json=JSON.stringify(list.map(s=>{const o=Object.assign({},s);return o;}));return 'DOT1.'+btoa(unescape(encodeURIComponent(json)));}
+function importShots(code){
+  const m=String(code).trim().match(/^DOT1\.([A-Za-z0-9+/=\s]+)$/);if(!m)throw new Error('That is not a shot pack code. It should start with DOT1.');
+  const arr=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/\s+/g,'')))));if(!Array.isArray(arr))throw new Error('The pack is empty.');
+  let n=0;for(const s of arr){
+    if(!s||!Array.isArray(s.pts)||!Array.isArray(s.spd)||s.pts.length<10||typeof s.startS!=='number')continue;
+    const clean={id:'u'+Date.now().toString(36)+n,custom:true,world:String(s.world||'valley').slice(0,40),name:String(s.name||'Imported move').slice(0,40),brief:String(s.brief||'').slice(0,140),ref:s.ref==='world'?'world':'car',
+      lens:lensById(s.lens).id,frame:{tx:clamp(+s.frame?.tx||0,-1,1),ty:clamp(+s.frame?.ty||0,-1,1),tol:clamp(+s.frame?.tol||.15,.05,.4)},tolM:6,
+      dur:(s.pts.length-1)/10,startS:wrapS(+s.startS),pts:s.pts.map(p=>[+p[0]||0,+p[1]||0,+p[2]||0]),spd:s.spd.map(v=>clamp(+v||0,0,40)),diff:0};
+    myShots.push(clean);n++;}
+  store.set('myShots',myShots);return n;
+}
+
+/* ---------- Locations: real-terrain maps ---------- */
+// Map files ("map packs") hold a height grid, the car route in local metres, and an aerial photo.
+const BUILTIN_MAPS=[{id:'bigsky',name:'Big Sky',file:'maps/big-sky.json',blurb:'Lone Mountain Trail climbing to Mountain Village, with Lone Mountain above. Montana.'}];
+const MAP_CREDITS='Elevation: USGS 3DEP. Aerial imagery: USGS National Map. Roads: US Census TIGER/Line.';
+const inViewer=(()=>{try{return window.top!==window.self;}catch(e){return true;}})();
+const idb={db:null,
+  open(){if(this.db)return Promise.resolve(this.db);return new Promise((res,rej)=>{try{const r=indexedDB.open('dualop',1);r.onupgradeneeded=()=>r.result.createObjectStore('maps',{keyPath:'id'});r.onsuccess=()=>{this.db=r.result;res(this.db);};r.onerror=()=>rej(r.error);}catch(e){rej(e);}});},
+  async tx(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('maps',mode),st=t.objectStore('maps'),q=fn(st);t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);});},
+  all(){return this.tx('readonly',s=>s.getAll());},put(m){return this.tx('readwrite',s=>s.put(m));},del(id){return this.tx('readwrite',s=>s.delete(id));}};
+let userMaps=[];const memMaps=new Map();
+async function loadUserMaps(){try{userMaps=(await idb.all())||[];}catch(e){userMaps=Array.from(memMaps.values());}renderLocations();}
+async function saveUserMap(pack){memMaps.set(pack.id,pack);try{await idb.put(pack);}catch(e){}await loadUserMaps();}
+async function deleteUserMap(id){memMaps.delete(id);try{await idb.del(id);}catch(e){}if(world.id===id)await useLocation('valley');await loadUserMaps();}
+function validPack(p){return p&&p.type==='dualop-map'&&typeof p.h==='string'&&p.nx>1&&p.nz>1&&Array.isArray(p.route)&&p.route.length>=2&&p.sizeX>0&&p.sizeZ>0;}
+async function getPack(id){
+  if(id==='valley')return null;
+  const u=userMaps.find(m=>m.id===id)||memMaps.get(id);if(u)return u;
+  const b=BUILTIN_MAPS.find(m=>m.id===id);if(!b)throw new Error('That map is no longer saved here.');
+  if(location.protocol==='file:')throw new Error('Built-in maps load when the trainer is opened from the RC bridge or the claude.ai link.');
+  const r=await fetch(b.file);if(!r.ok)throw new Error('Could not load '+b.name+' ('+r.status+').');const p=await r.json();if(!validPack(p))throw new Error('The '+b.name+' map file is damaged.');return p;
+}
+let mapBusy=false;
+async function useLocation(id){
+  if(mapBusy)return;mapBusy=true;renderLocations();toast(id==='valley'?'Loading the practice valley…':'Loading map…');
+  try{
+    const pack=await getPack(id);
+    await buildWorld(pack);
+    store.set('map',id);world.mini=pack&&pack.imagery?await miniPhoto(pack.imagery):null;
+    car.v=15;resetDroneBehindCar();if(S.mode!=='home')goHome();else renderHome();
+    toast((pack?pack.name:'Practice valley')+' loaded.');
+  }catch(e){toast(e.message||'That map could not be loaded.');}
+  mapBusy=false;renderLocations();
+}
+async function miniPhoto(src){const c=await imageToCanvas(src),m=document.createElement('canvas'),s=Math.min(1,1024/Math.max(c.width,c.height));m.width=Math.round(c.width*s);m.height=Math.round(c.height*s);m.getContext('2d').drawImage(c,0,0,m.width,m.height);return m;}
+function renderLocations(){
+  const cards=[{id:'valley',name:'Practice valley',blurb:'A made-up Montana valley loop. Always available, works offline.',kind:'Built in'}]
+    .concat(BUILTIN_MAPS.map(m=>({id:m.id,name:m.name,blurb:m.blurb,kind:'Real terrain'})))
+    .concat(userMaps.map(m=>({id:m.id,name:m.name,blurb:(m.sizeX/1000).toFixed(1)+' × '+(m.sizeZ/1000).toFixed(1)+' km around '+m.lat.toFixed(4)+', '+m.lon.toFixed(4),kind:'Your map',user:true})));
+  $('#locGrid').innerHTML=cards.map(c=>{const cur=c.id===world.id;
+    return '<div class="loc" aria-current="'+cur+'"><div class="shot-top"><span>'+esc(c.kind.toUpperCase())+'</span><span>'+(cur?'IN USE':'')+'</span></div><h4>'+esc(c.name)+'</h4><p>'+esc(c.blurb)+'</p><div class="mini">'+
+      (cur?'':'<button class="btn small" type="button" data-loc="'+c.id+'"'+(mapBusy?' disabled':'')+'>Fly here</button>')+
+      (c.id!=='valley'?'<button class="btn small" type="button" data-savemap="'+c.id+'">Save map file</button>':'')+
+      (c.user?'<button class="btn small" type="button" data-delmap="'+c.id+'">Delete</button>':'')+'</div></div>';}).join('');
+  $('#btnMakeMap').disabled=inViewer;$('#btnMakeMap').title=inViewer?'Map making needs the RC bridge page or the standalone file':'';
+}
+async function saveMapFile(id){
+  try{const p=await getPack(id),blob=new Blob([JSON.stringify(p)],{type:'application/json'}),name=(p.name||'map').replace(/[^\w-]+/g,'-').toLowerCase()+'.json';
+    if(inViewer){toast('Saving files is blocked in this viewer. Use the RC bridge page or the standalone file.');return;}
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);toast('Saved '+name+'. Trainees load it with Load map file.');
+  }catch(e){toast(e.message);}
+}
+$('#locGrid').addEventListener('click',e=>{const f=e.target.closest('[data-loc]'),s=e.target.closest('[data-savemap]'),d=e.target.closest('[data-delmap]');
+  if(f)useLocation(f.dataset.loc);if(s)saveMapFile(s.dataset.savemap);
+  if(d){if(d.dataset.armed!=='1'){d.dataset.armed='1';d.textContent='Tap again to delete';return;}deleteUserMap(d.dataset.delmap);}});
+$('#btnLoadMap').onclick=()=>$('#mapFile').click();
+$('#mapFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const p=JSON.parse(await f.text());if(!validPack(p))throw new Error('That file is not a Dual-Op Trainer map.');await saveUserMap(p);await useLocation(p.id);}catch(err){toast(err.message||'That map file could not be read.');}};
+
+/* ---------- Map maker: USGS elevation and imagery, Census roads ---------- */
+const MR=6378137,mercX=lon=>MR*lon*DEG,mercY=lat=>MR*Math.log(Math.tan(Math.PI/4+lat*DEG/2)),lonOfX=X=>X/MR/DEG,latOfY=Y=>(2*Math.atan(Math.exp(Y/MR))-Math.PI/2)/DEG;
+function projection(lat0,lon0){const k=Math.cos(lat0*DEG),X0=mercX(lon0),Y0=mercY(lat0);
+  return{k,X0,Y0,toLocal:(lat,lon)=>[(mercX(lon)-X0)*k,-(mercY(lat)-Y0)*k],toLatLon:(x,z)=>[latOfY(Y0-z/k),lonOfX(X0+x/k)]};}
+// Minimal reader for the uncompressed 32-bit float TIFFs the USGS elevation service returns (tiled or striped)
+function readTiffF32(buf){
+  const dv=new DataView(buf),le=dv.getUint16(0)===0x4949,u16=o=>dv.getUint16(o,le),u32=o=>dv.getUint32(o,le);
+  const ifd=u32(4),n=u16(ifd),tags={},SZ={1:1,2:1,3:2,4:4,16:8};
+  for(let i=0;i<n;i++){const o=ifd+2+i*12,tag=u16(o),type=u16(o+2),cnt=u32(o+4),sz=SZ[type]||1,vo=cnt*sz<=4?o+8:u32(o+8);if(!(tag in TIFF_TAGS))continue;
+    const v=[];for(let k=0;k<cnt;k++)v.push(type===3?u16(vo+k*2):type===16?Number(dv.getBigUint64(vo+k*8,le)):u32(vo+k*4));tags[tag]=v;}
+  const W=tags[256][0],H=tags[257][0];
+  if((tags[259]||[1])[0]!==1)throw new Error('The elevation service sent a compressed file.');
+  if((tags[258]||[32])[0]!==32||(tags[339]||[3])[0]!==3)throw new Error('The elevation service sent an unexpected number format.');
+  const out=new Float32Array(W*H);
+  if(tags[322]){const tw=tags[322][0],th=tags[323][0],across=Math.ceil(W/tw);
+    tags[324].forEach((off,t)=>{const tx=(t%across)*tw,ty=Math.floor(t/across)*th;for(let y=0;y<th&&ty+y<H;y++)for(let x=0;x<tw;x++){if(tx+x<W)out[(ty+y)*W+tx+x]=dv.getFloat32(off+(y*tw+x)*4,le);}});}
+  else{const rps=(tags[278]||[H])[0];tags[273].forEach((off,s)=>{for(let r=0;r<rps&&s*rps+r<H;r++)for(let x=0;x<W;x++)out[(s*rps+r)*W+x]=dv.getFloat32(off+(r*W+x)*4,le);});}
+  return{W,H,data:out};
+}
+const TIFF_TAGS={256:1,257:1,258:1,259:1,273:1,278:1,322:1,323:1,324:1,339:1};
+async function fetchDEM(P,sizeX,sizeZ,nx,nz){
+  const cx=sizeX/(nx-1),cz=sizeZ/(nz-1),b=[P.X0+(-sizeX/2-cx/2)/P.k,P.Y0+(-sizeZ/2-cz/2)/P.k,P.X0+(sizeX/2+cx/2)/P.k,P.Y0+(sizeZ/2+cz/2)/P.k];
+  const url='https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox='+b.map(v=>v.toFixed(2)).join(',')+
+    '&bboxSR=3857&imageSR=3857&size='+nx+','+nz+'&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&compression=None&f=image';
+  const r=await fetch(url);if(!r.ok)throw new Error('The USGS elevation service answered '+r.status+'. Try again in a minute.');
+  const t=readTiffF32(await r.arrayBuffer());if(t.W!==nx||t.H!==nz)throw new Error('The elevation grid came back the wrong size.');
+  let sum=0,cnt=0;for(const v of t.data)if(v>-500&&v<9000){sum+=v;cnt++;}if(!cnt)throw new Error('No elevation data there. USGS 3DEP covers the US only.');
+  const mean=sum/cnt;for(let i=0;i<t.data.length;i++)if(!(t.data[i]>-500&&t.data[i]<9000))t.data[i]=mean;
+  return t.data;
+}
+async function fetchImagery(P,sizeX,sizeZ,onProg){
+  const maxTex=Math.min(4096,renderer.capabilities.maxTextureSize),span=Math.max(sizeX,sizeZ);
+  const res=z=>156543.03392*P.k/2**z;let z=clamp(Math.floor(Math.log2(156543.03392*P.k/(span/maxTex*.75))),10,17);
+  const outRes=Math.max(span/maxTex,res(z)),W=Math.ceil(sizeX/outRes),H=Math.ceil(sizeZ/outRes);
+  const xmin=P.X0-sizeX/2/P.k,xmax=P.X0+sizeX/2/P.k,ymin=P.Y0-sizeZ/2/P.k,ymax=P.Y0+sizeZ/2/P.k,T=2*Math.PI*MR/2**z,O=Math.PI*MR;
+  const tx0=Math.floor((xmin+O)/T),tx1=Math.floor((xmax+O)/T),ty0=Math.floor((O-ymax)/T),ty1=Math.floor((O-ymin)/T);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');g.fillStyle='#6b7058';g.fillRect(0,0,W,H);
+  const jobs=[];for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++)jobs.push([tx,ty]);
+  let done=0,fail=0;
+  const one=([tx,ty])=>new Promise(res=>{const im=new Image();im.crossOrigin='anonymous';
+    im.onload=()=>{const dx=(tx*T-O-xmin)/(xmax-xmin)*W,dy=(ymax-(O-ty*T))/(ymax-ymin)*H,dw=T/(xmax-xmin)*W,dh=T/(ymax-ymin)*H;g.drawImage(im,dx,dy,dw+.5,dh+.5);done++;onProg(done,jobs.length);res();};
+    im.onerror=()=>{fail++;done++;onProg(done,jobs.length);res();};
+    im.src='https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/'+z+'/'+ty+'/'+tx;});
+  let i=0;await Promise.all(Array.from({length:8},async()=>{while(i<jobs.length)await one(jobs[i++]);}));
+  if(fail>jobs.length*.3)throw new Error('Most aerial photo tiles failed to load. Check the connection and try again.');
+  return cv;
+}
+// Census TIGER road lines by name, stitched end to end into one route
+async function fetchRoad(P,sizeX,sizeZ,name){
+  const sw=P.toLatLon(-sizeX/2,sizeZ/2),ne=P.toLatLon(sizeX/2,-sizeZ/2),q=String(name).toUpperCase().replace(/'/g,"''").trim();
+  if(!q)throw new Error('Type a road name first.');
+  const paths=[];
+  for(const L of [2,6,8]){
+    const u='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer/'+L+'/query?where='+encodeURIComponent("UPPER(NAME) LIKE '%"+q+"%'")+
+      '&geometry='+[sw[1],sw[0],ne[1],ne[0]].map(v=>v.toFixed(5)).join(',')+'&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=NAME&returnGeometry=true&outSR=4326&f=json';
+    try{const r=await fetch(u);if(!r.ok)continue;const d=await r.json();for(const f of d.features||[])for(const p of (f.geometry&&f.geometry.paths)||[])paths.push(p.map(c=>P.toLocal(c[1],c[0])));}catch(e){}
+  }
+  if(!paths.length)throw new Error('No road called "'+name+'" in that area. Check the spelling the Census uses (Trl, Rd, Hwy), or draw the route.');
+  return stitch(paths);
+}
+function stitch(paths){
+  const len=p=>p.reduce((s,c,i)=>i?s+Math.hypot(c[0]-p[i-1][0],c[1]-p[i-1][1]):0,0),d=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  const rest=paths.slice().sort((a,b)=>len(b)-len(a));let chain=rest.shift();
+  for(let grew=true;grew;){grew=false;
+    for(let i=0;i<rest.length;i++){const p=rest[i],s=chain[0],e=chain[chain.length-1];
+      if(d(e,p[0])<60)chain=chain.concat(p.slice(1));else if(d(e,p[p.length-1])<60)chain=chain.concat(p.slice(0,-1).reverse());
+      else if(d(s,p[p.length-1])<60)chain=p.slice(0,-1).concat(chain);else if(d(s,p[0])<60)chain=p.slice(1).reverse().concat(chain);else continue;
+      rest.splice(i,1);grew=true;break;}}
+  return chain;
+}
+// Keep the longest stretch inside the map, then even out the spacing and smooth GPS or digitising wobble
+function cleanRoute(pts,hx,hz){
+  const inside=p=>Math.abs(p[0])<hx-40&&Math.abs(p[1])<hz-40;let best=[],cur=[];
+  for(const p of pts){if(inside(p))cur.push(p);else{if(cur.length>best.length)best=cur;cur=[];}}if(cur.length>best.length)best=cur;
+  if(best.length<2)return[];
+  const out=[best[0]];let acc=0;
+  for(let i=1;i<best.length;i++){const a=best[i-1],b=best[i],L=Math.hypot(b[0]-a[0],b[1]-a[1]);let t=10-acc;while(t<=L){out.push([a[0]+(b[0]-a[0])*t/L,a[1]+(b[1]-a[1])*t/L]);t+=10;}acc=(acc+L)%10;}
+  out.push(best[best.length-1]);
+  return out.map((p,i)=>{if(i<2||i>out.length-3)return p;let x=0,z=0;for(let k=-2;k<=2;k++){x+=out[i+k][0];z+=out[i+k][1];}return[x/5,z/5];}).map(p=>[Math.round(p[0]*10)/10,Math.round(p[1]*10)/10]);
+}
+function parseRouteFile(text){
+  const t=text.trim();let lines=[];
+  if(t[0]==='{'){const g=JSON.parse(t),walk=o=>{if(!o)return;if(o.type==='FeatureCollection')o.features.forEach(walk);else if(o.type==='Feature')walk(o.geometry);
+      else if(o.type==='LineString')lines.push(o.coordinates.map(c=>[c[1],c[0]]));else if(o.type==='MultiLineString')o.coordinates.forEach(l=>lines.push(l.map(c=>[c[1],c[0]])));};walk(g);}
+  else{const x=new DOMParser().parseFromString(t,'application/xml');
+    const pts=[...x.getElementsByTagName('trkpt')].concat([...x.getElementsByTagName('rtept')]);
+    if(pts.length)lines.push(pts.map(p=>[+p.getAttribute('lat'),+p.getAttribute('lon')]));
+    for(const c of x.getElementsByTagName('coordinates'))lines.push(c.textContent.trim().split(/\s+/).map(s=>s.split(',').map(Number)).filter(a=>a.length>=2).map(a=>[a[1],a[0]]));}
+  lines=lines.filter(l=>l.length>=2&&l.every(p=>isFinite(p[0])&&isFinite(p[1])));
+  if(!lines.length)throw new Error('No track or line found in that file.');
+  return lines.sort((a,b)=>b.length-a.length)[0];
+}
+function parseWhere(s){const m=String(s).match(/@?(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);if(!m)return null;const lat=+m[1],lon=+m[2];return Math.abs(lat)<=85&&Math.abs(lon)<=180?{lat,lon}:null;}
+
+const mm={src:'name',P:null,lat:0,lon:0,sizeX:0,sizeZ:0,dem:null,img:null,route:[],busy:false,fileRoute:null};
+function openMapMaker(preset){
+  if(inViewer){toast('Map making needs the RC bridge page or the standalone file.');return;}
+  const p=preset||{name:'Big Sky',where:'45.2815, -111.392',w:11,h:5.2,road:'Lone Mountain Trl'};
+  $('#mmName').value=p.name;$('#mmWhere').value=p.where;$('#mmW').value=p.w;$('#mmH').value=p.h;$('#mmRoad').value=p.road||'';
+  Object.assign(mm,{dem:null,img:null,route:[],P:null,fileRoute:null});setSrc('name');$('#mmBuild').disabled=true;mmStatus('Set the area, then load terrain and photo. Big Sky is filled in as an example.');drawMM();
+  showOverlay('mapMaker');
+}
+function setSrc(s){mm.src=s;$('#mmSrc').innerHTML=segHTML([{id:'name',label:'Road by name'},{id:'file',label:'GPX, KML or GeoJSON'},{id:'draw',label:'Draw on the photo'}],s,'src');$('#mmRoadRow').hidden=s!=='name';}
+const mmStatus=t=>{$('#mmStatus').textContent=t;};
+function mmArea(){
+  const w=parseWhere($('#mmWhere').value);if(!w)throw new Error('Enter the centre as "lat, lon", for example 45.2815, -111.392.');
+  const sx=clamp(+$('#mmW').value||4,1,14)*1000,sz=clamp(+$('#mmH').value||4,1,14)*1000;return{...w,sx,sz};
+}
+async function mmFetch(){
+  if(mm.busy)return;let a;try{a=mmArea();}catch(e){mmStatus(e.message);return;}
+  mm.busy=true;$('#mmFetch').disabled=true;$('#mmBuild').disabled=true;
+  try{
+    mm.lat=a.lat;mm.lon=a.lon;mm.sizeX=a.sx;mm.sizeZ=a.sz;mm.P=projection(a.lat,a.lon);
+    const cell=clamp(Math.max(a.sx,a.sz)/700,8,25);mm.nx=Math.round(a.sx/cell)+1;mm.nz=Math.round(a.sz/cell)+1;
+    mmStatus('Loading USGS elevation ('+mm.nx+' × '+mm.nz+' points, '+cell.toFixed(0)+' m apart)…');
+    mm.dem=await fetchDEM(mm.P,a.sx,a.sz,mm.nx,mm.nz);
+    mm.img=await fetchImagery(mm.P,a.sx,a.sz,(d,n)=>mmStatus('Loading aerial photo tiles: '+d+' of '+n+'…'));
+    if(mm.src==='name'){mmStatus('Looking up "'+$('#mmRoad').value+'" in Census road data…');mm.route=cleanRoute(await fetchRoad(mm.P,a.sx,a.sz,$('#mmRoad').value),a.sx/2,a.sz/2);}
+    else if(mm.src==='file'&&mm.fileRoute)mm.route=cleanRoute(mm.fileRoute.map(p=>mm.P.toLocal(p[0],p[1])),a.sx/2,a.sz/2);
+    drawMM();
+    if(mm.route.length<2)mmStatus(mm.src==='draw'?'Terrain loaded. Click along the road on the photo to lay the car route, then Build map.':'Terrain loaded, but the route did not fall inside the area. Draw it on the photo or adjust the area.');
+    else mmStatus('Ready: '+(routeLen(mm.route)/1000).toFixed(1)+' km route. Click the photo to extend it, or Build map.');
+  }catch(e){mmStatus(e.message||'Something went wrong loading map data.');}
+  mm.busy=false;$('#mmFetch').disabled=false;$('#mmBuild').disabled=!(mm.dem&&mm.route.length>=2);
+}
+const routeLen=r=>r.reduce((s,c,i)=>i?s+Math.hypot(c[0]-r[i-1][0],c[1]-r[i-1][1]):0,0);
+function drawMM(){
+  const cv=$('#mmCanvas'),g=cv.getContext('2d');let W=960,H=480;
+  if(mm.img){H=Math.round(W*mm.sizeZ/mm.sizeX);if(H>600){H=600;W=Math.round(H*mm.sizeX/mm.sizeZ);}}
+  cv.width=W;cv.height=H;g.fillStyle='#0f1214';g.fillRect(0,0,W,H);
+  if(!mm.img){g.fillStyle='#959b99';g.font='15px Barlow, system-ui, sans-serif';g.textAlign='center';g.fillText('The aerial photo appears here after loading.',W/2,H/2);return;}
+  g.drawImage(mm.img,0,0,W,H);
+  const X=x=>(x/mm.sizeX+.5)*W,Y=z=>(z/mm.sizeZ+.5)*H;
+  if(mm.route.length){g.lineWidth=4;g.strokeStyle='rgba(0,0,0,.6)';g.beginPath();mm.route.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.stroke();
+    g.lineWidth=2;g.strokeStyle='#e5402c';g.stroke();const s=mm.route[0];g.fillStyle='#62d08b';g.beginPath();g.arc(X(s[0]),Y(s[1]),5,0,TAU);g.fill();}
+  g.fillStyle='rgba(0,0,0,.55)';g.fillRect(0,H-20,W,20);g.fillStyle='#ebe7dd';g.font='11px IBM Plex Mono, monospace';g.textAlign='left';
+  g.fillText((mm.sizeX/1000).toFixed(1)+' × '+(mm.sizeZ/1000).toFixed(1)+' km · north up · '+MAP_CREDITS,8,H-6);
+}
+$('#mmCanvas').addEventListener('click',e=>{if(!mm.img)return;const r=e.target.getBoundingClientRect(),cv=e.target;
+  const sx=cv.width/r.width,sy=cv.height/r.height,px=(e.clientX-r.left)*sx,py=(e.clientY-r.top)*sy;
+  mm.route.push([Math.round(((px/cv.width)-.5)*mm.sizeX*10)/10,Math.round(((py/cv.height)-.5)*mm.sizeZ*10)/10]);drawMM();
+  $('#mmBuild').disabled=!(mm.dem&&mm.route.length>=2);mmStatus(mm.route.length+' route points, '+(routeLen(mm.route)/1000).toFixed(2)+' km.');});
+$('#mmSrc').addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(!b)return;setSrc(b.dataset.src);if(b.dataset.src==='file')$('#mmRouteFile').click();});
+$('#mmRouteFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const pts=parseRouteFile(await f.text());mm.fileRoute=pts;
+    let la0=90,la1=-90,lo0=180,lo1=-180;for(const p of pts){la0=Math.min(la0,p[0]);la1=Math.max(la1,p[0]);lo0=Math.min(lo0,p[1]);lo1=Math.max(lo1,p[1]);}
+    const lat=(la0+la1)/2,lon=(lo0+lo1)/2,P=projection(lat,lon),a=P.toLocal(la0,lo0),b=P.toLocal(la1,lo1);
+    $('#mmWhere').value=lat.toFixed(5)+', '+lon.toFixed(5);$('#mmW').value=clamp(Math.ceil((Math.abs(b[0]-a[0])+800)/500)/2,1,14);$('#mmH').value=clamp(Math.ceil((Math.abs(b[1]-a[1])+800)/500)/2,1,14);
+    mmStatus('Route file read: '+pts.length+' points. The area now fits it; press Load terrain and photo.');}catch(err){mmStatus(err.message);}};
+$('#mmUndo').onclick=()=>{mm.route.pop();drawMM();$('#mmBuild').disabled=!(mm.dem&&mm.route.length>=2);};
+$('#mmClear').onclick=()=>{mm.route=[];drawMM();$('#mmBuild').disabled=true;};
+$('#mmCancel').onclick=()=>{showOverlay('home');};
+$('#mmFetch').onclick=mmFetch;
+$('#mmBuild').onclick=async()=>{
+  if(!mm.dem||mm.route.length<2)return;$('#mmBuild').disabled=true;mmStatus('Building the map…');
+  let base=Infinity;for(const v of mm.dem)base=Math.min(base,v);base=Math.floor(base);
+  const rel=new Float32Array(mm.dem.length);for(let i=0;i<rel.length;i++)rel[i]=mm.dem[i]-base;
+  const pack={type:'dualop-map',v:1,id:'m'+Date.now().toString(36),name:($('#mmName').value||'My map').trim().slice(0,40),lat:mm.lat,lon:mm.lon,sizeX:mm.sizeX,sizeZ:mm.sizeZ,nx:mm.nx,nz:mm.nz,base,
+    h:encodeHeights(rel),route:mm.route,closed:$('#mmClosed').checked,imagery:mm.img.toDataURL('image/jpeg',.82),credits:MAP_CREDITS,created:new Date().toISOString()};
+  showOverlay('home');await saveUserMap(pack);await useLocation(pack.id);
+  if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))try{await fetch('/maps/'+pack.id+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pack)});}catch(e){}
+};
+$('#btnMakeMap').onclick=()=>openMapMaker();
+
+/* ---------- Controls drawer ---------- */
+function renderControls(){
+  const list=$('#devList');
+  if(padBlocked)list.innerHTML='<div class="callout bad"><p>This viewer blocks the browser gamepad API. Open the standalone file in Chrome to use a controller.</p></div>';
+  else if(!lastDevs.length)list.innerHTML='<p class="muted">No controllers seen. Plug one in, then move a stick or press a button. Browsers hide controllers until you touch them.</p>';
+  else list.innerHTML=lastDevs.map(d=>'<div class="dev" data-dev="'+d.key+'"><header>'+esc(d.label)+' <span class="tag">'+({standard:'standard gamepad',generic:'joystick',dji:'DJI via USB serial','dji-adb':'DJI via RC bridge'})[d.kind]+'</span></header><div class="axes">'+
+    Array.from(d.axes).map((v,i)=>'<div class="ax"><i></i><span>A'+i+'</span></div>').join('')+'</div>'+(d.kind==='dji'?'<div class="hint" data-djiinfo></div>':'')+'</div>').join('');
+  seatOptions($('#seatPilot'),'pilot');seatOptions($('#seatCam'),'camera');
+  const fn={pan:'Pan',tilt:'Tilt',zoom:'Zoom',thr:'Throttle',yaw:'Yaw',pitch:'Pitch',roll:'Roll'},rows=[];
+  for(const seat of ['camera','pilot']){const dev=seatDev[seat],m=mapFor(seat,dev);
+    for(const f of (seat==='camera'?['pan','tilt']:['thr','yaw','pitch','roll'])){const b=m&&m[f];
+      rows.push('<tr><td>'+(seat==='camera'?'Camera':'Pilot')+' '+fn[f]+'</td><td>'+(dev?esc(dev.label)+' · axis '+(b?b.axis:'—'):'Keyboard')+'</td><td>'+(dev&&b?'<button class="btn small" type="button" data-inv="'+seat+':'+f+'">Invert</button>':'')+'</td></tr>');}}
+  $('#bindTable').innerHTML='<thead><tr><th>Function</th><th>Source</th><th></th></tr></thead><tbody>'+rows.join('')+'</tbody>';
+  const nSer=dji.list.filter(d=>d.ok).length+djiu.list.filter(d=>d.ok).length;
+  $('#djiState').textContent=({on:'Bridge connected · '+bridge.devices.length+' controller'+(bridge.devices.length===1?'':'s'),connecting:'Looking for the bridge…',lost:'Bridge stopped. Restart it; this page reconnects on its own.',blocked:'This viewer blocks the bridge.',off:''})[bridge.state]+(nSer?' · '+nSer+' RC-N on USB':'');
+  renderDjiNotes();
+}
+function liveAxes(){
+  if($('#controls').hidden)return;
+  for(const d of lastDevs){const box=document.querySelector('.dev[data-dev="'+d.key+'"]');if(!box){renderControls();return;}
+    const bars=box.querySelectorAll('.ax i');Array.from(d.axes).forEach((v,i)=>{const b=bars[i];if(!b)return;const c=clamp(v,-1,1);b.style.left=(c<0?50+c*50:50)+'%';b.style.width=Math.abs(c)*50+'%';});
+    const info=box.querySelector('[data-djiinfo]');if(info){const dv=dji.list.concat(djiu.list).find(x=>x.key===d.key);
+      if(dv)info.textContent=dv.packets?'Receiving '+dv.hz+' stick packets/s · '+(dv.moved?'sticks are moving':'values have not changed yet: move the sticks')+' · payload '+dv.last:'Connected, waiting for stick packets…';}}
+}
+function renderDjiNotes(){
+  const ser=serialAllowed(),usb=usbAllowed();
+  $('#djiNotes').innerHTML=
+    '<p>DJI drone controllers are not USB gamepads, so browsers and most sims can\u2019t see them directly. This trainer talks to them itself.</p>'+
+    '<div class="callout'+(usb?'':' bad')+'"><p><b>DJI RC 2 and RC Plus: direct USB</b> '+(usb?'<span class="tag ok">available</span>':'<span class="tag no">blocked here</span>')+'</p>'+
+    '<ul><li>Power the aircraft off. Plug the controller into the computer with a data USB-C cable and turn it on.</li>'+
+    '<li>Press <b>Connect DJI controller (USB)</b> and pick it. The RC 2 may be listed as KATMAI-IDP.</li>'+
+    '<li>Move the sticks: the controller\u2019s card above should say the sticks are moving. Then run <b>Stick setup</b> for its seat.</li>'+
+    '<li>Dual op: connect a second controller the same way and pick it under Seats.</li>'+
+    '<li>Works in Chrome, Edge and Brave. No drivers, no USB debugging, no bridge app for the sticks.</li></ul>'+
+    (usb?'':'<p>This viewer blocks direct USB. Open the trainer from http://localhost:8790 or the standalone file.</p>')+
+    '<p class="hint">Only one program can hold a controller at a time. If Connect says it can\u2019t open it, close DJI Assistant, other trainer tabs, or an RC bridge started with --adb.</p></div>'+
+    '<div class="callout'+(ser?'':' bad')+'"><p><b>RC-N1, RC-N2, RC-N3: USB serial</b> '+(ser?'<span class="tag ok">available</span>':'<span class="tag no">blocked here</span>')+'</p>'+
+    '<p>These open a USB serial link instead. Plug in with a data cable (on the RC-N1, the bottom port), press <b>Connect RC-N serial</b> and pick it. If no stick data arrives, connect again and pick the other port it lists.</p></div>'+
+    '<p class="hint">Fallback for the RC Plus: <code>node rc-bridge.mjs --adb</code> reads it over USB debugging and appears under <b>Connect RC bridge</b>. The DJI FPV Remote Controller 2 and 3 act as normal joysticks and need none of this.</p>';
+}
+
+/* ---------- Settings drawer ---------- */
+const segHTML=(items,cur,attr)=>items.map(it=>'<button type="button" data-'+attr+'="'+it.id+'" aria-pressed="'+(String(it.id)===String(cur))+'" title="'+esc(it.title||it.label)+'">'+esc(it.label)+'</button>').join('');
+const gpItems=()=>settings.gimbalProfiles.map((p,i)=>({id:i,label:(i+1)+' '+p.name,title:p.name}));
+const fmItems=()=>FLIGHT_MODES.map(m=>({id:m.id,label:m.id+' '+m.label.split(' - ')[1].split(' ')[0],title:m.label}));
+function renderQuick(){
+  const g=segHTML(gpItems(),settings.gimbalProfile,'gp'),f=segHTML(FLIGHT_MODES.map(m=>({id:m.id,label:m.id,title:m.label})),settings.flightMode,'fm');
+  if($('#liveGp')._h!==g){$('#liveGp').innerHTML=g;$('#liveGp')._h=g;}if($('#liveFm')._h!==f){$('#liveFm').innerHTML=f;$('#liveFm')._h=f;}
+}
+function renderSettings(){
+  const s=settings,gp=gimbalProf(),fp=flightProf(),spd=v=>imperial()?Math.round(v*2.23694)+' mph':Math.round(v*3.6)+' km/h';
+  $('#setGimbalMode').value=s.gimbalMode;$('#setCamLayout').value=s.camLayout;$('#setInvert').checked=s.invertTilt;
+  $('#gpTabs').innerHTML=segHTML(gpItems(),s.gimbalProfile,'gp');$('#fmTabs').innerHTML=segHTML(fmItems(),s.flightMode,'fm');
+  if(document.activeElement!==$('#gpName'))$('#gpName').value=gp.name;
+  for(const [id,k,f] of [['gpPanMax','panMax',v=>v+'°/s'],['gpTiltMax','tiltMax',v=>v+'°/s'],['gpPanSmooth','panSmooth',v=>(+v).toFixed(2)],['gpTiltSmooth','tiltSmooth',v=>(+v).toFixed(2)],['gpPanExpo','panExpo',v=>(+v).toFixed(2)],['gpTiltExpo','tiltExpo',v=>(+v).toFixed(2)]]){
+    $('#'+id).value=gp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(gp[k]);}
+  for(const [id,k,f] of [['fpVmax','vmax',spd],['fpYaw','yaw',v=>v+'°/s'],['fpUp','up',v=>(+v).toFixed(1)+' m/s'],['fpDown','down',v=>(+v).toFixed(1)+' m/s'],['fpAccel','accel',v=>(+v).toFixed(1)],['fpExpo','expo',v=>(+v).toFixed(2)]]){
+    $('#'+id).value=fp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(fp[k]);}
+  $('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
+  app.classList.toggle('noguides',!s.guides);app.classList.toggle('noring',!s.ring);renderQuick();
+}
+function bindSetting(id,key,parse){$(id).addEventListener('input',e=>{settings[key]=parse(e.target);saveSettings();renderSettings();});}
+bindSetting('#setGimbalMode','gimbalMode',t=>t.value);bindSetting('#setCamLayout','camLayout',t=>t.value);bindSetting('#setInvert','invertTilt',t=>t.checked);
+bindSetting('#setUnits','units',t=>t.value);bindSetting('#setGuides','guides',t=>t.checked);bindSetting('#setRing','ring',t=>t.checked);bindSetting('#setDeadband','deadband',t=>+t.value);
+for(const [id,k] of [['gpPanMax','panMax'],['gpTiltMax','tiltMax'],['gpPanSmooth','panSmooth'],['gpTiltSmooth','tiltSmooth'],['gpPanExpo','panExpo'],['gpTiltExpo','tiltExpo']])
+  $('#'+id).addEventListener('input',e=>{gimbalProf()[k]=+e.target.value;saveSettings();renderSettings();});
+for(const [id,k] of [['fpVmax','vmax'],['fpYaw','yaw'],['fpUp','up'],['fpDown','down'],['fpAccel','accel'],['fpExpo','expo']])
+  $('#'+id).addEventListener('input',e=>{flightProf()[k]=+e.target.value;saveSettings();renderSettings();});
+$('#gpName').addEventListener('input',e=>{gimbalProf().name=e.target.value.slice(0,24)||'Profile '+(settings.gimbalProfile+1);saveSettings();renderSettings();});
+function setGimbalProfile(i,announce){settings.gimbalProfile=((i%3)+3)%3;saveSettings();renderSettings();if(announce)toast('Gimbal profile '+(settings.gimbalProfile+1)+': '+gimbalProf().name);}
+function setFlightMode(m,announce){settings.flightMode=m;saveSettings();renderSettings();if(announce)toast('Flight mode '+m+': '+FLIGHT_MODES.find(x=>x.id===m).label.split(' - ')[1]);}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-gp]'),f=e.target.closest('[data-fm]');
+  if(g)setGimbalProfile(+g.dataset.gp,!g.closest('#gpTabs'));if(f)setFlightMode(f.dataset.fm,!f.closest('#fmTabs'));});
+$('#setReset').onclick=()=>{Object.assign(settings,clone(DEFAULTS));saveSettings();renderSettings();toast('Settings reset.');};
+
+/* ---------- Wiring ---------- */
+function openDrawer(id){
+  if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();
+  for(const d of ['controls','settings'])$('#'+d).hidden=d!==id;
+  if(id==='controls')renderControls();if(id==='settings')renderSettings();
+}
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{b.closest('.drawer').hidden=true;cancelCalib();});
+$('#btnControls').onclick=()=>openDrawer($('#controls').hidden?'controls':null);
+$('#btnSettings').onclick=()=>openDrawer($('#settings').hidden?'settings':null);
+$('#btnShots').onclick=()=>{openDrawer(null);goHome();};
+$('#btnFull').onclick=()=>{try{const p=document.fullscreenElement?document.exitFullscreen():app.requestFullscreen();if(p&&p.catch)p.catch(()=>toast('Full screen is not available here.'));}catch(e){toast('Full screen is not available here.');}};
+$('#btnSwap').onclick=()=>{S.swapPref=!S.swap;applyRoleView();};
+document.querySelectorAll('.role').forEach(b=>b.onclick=()=>{S.role=b.dataset.role;store.set('role',S.role);renderHome();applyRoleView();});
+$('#home').addEventListener('click',e=>{const c=e.target.closest('.shot');if(!c)return;const id=c.dataset.shot;if(id==='sandbox')startSandbox();else{const sh=shotById(id);if(sh)openBrief(sh);}});
+$('#bStart').onclick=roll;$('#bBack').onclick=goHome;
+$('#bLens').onchange=e=>{setLens(e.target.value);placeCameras();aimAngles(S.shot.frame.tx,S.shot.frame.ty,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;};
+$('#bDelete').onclick=()=>{const sh=S.shot;if($('#bDelete').dataset.armed!=='1'){$('#bDelete').dataset.armed='1';$('#bDelete').textContent='Tap again to delete';return;}
+  myShots=myShots.filter(s=>s!==sh);store.set('myShots',myShots);$('#bDelete').dataset.armed='';$('#bDelete').textContent='Delete shot';toast('Deleted "'+sh.name+'".');goHome();};
+$('#rRetry').onclick=roll;$('#rShots').onclick=goHome;
+$('#rNext').onclick=()=>{const all=allShots(),i=all.indexOf(S.shot);if(i>=0&&i<all.length-1)openBrief(all[i+1]);};
+$('#rCopy').onclick=()=>copyText($('#rText').value,$('#rText'));
+$('#pResume').onclick=resume;
+$('#pRestart').onclick=()=>{if(S.pausedFrom==='sandbox'){startSandbox();return;}S.mode='paused';roll();};
+$('#pQuit').onclick=goHome;
+$('#sSave').onclick=saveRecordedShot;$('#sDiscard').onclick=()=>{showOverlay(null);S.mode='sandbox';toast('Move discarded.');};
+$('#btnExportAll').onclick=()=>{if(!myShots.length){toast('Record a move in the sandbox first.');return;}
+  const code=exportShots(myShots),t=$('#exportText');$('#importBox').hidden=true;$('#exportBox').hidden=false;t.value=code;copyText(code,t);};
+$('#btnExportClose').onclick=()=>{$('#exportBox').hidden=true;};
+$('#btnImport').onclick=()=>{$('#exportBox').hidden=true;$('#importBox').hidden=false;$('#importText').value='';$('#importText').focus();};
+$('#btnImportCancel').onclick=()=>{$('#importBox').hidden=true;};
+$('#btnImportGo').onclick=()=>{try{const n=importShots($('#importText').value);$('#importBox').hidden=true;renderHome();toast(n?'Added '+n+' shot'+(n>1?'s':'')+'.':'No valid shots in that pack.');}catch(e){toast(e.message||'That code could not be read.');}};
+$('#carSpeed').oninput=e=>{S.sandSpeed=+e.target.value;$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);};
+$('#btnCarStop').onclick=()=>{S.carStopped=!S.carStopped;$('#btnCarStop').textContent=S.carStopped?'Start car':'Stop car';};
+$('#btnRec').onclick=()=>rec.on?stopRecord(true):startRecord();
+$('#sbLens').innerHTML=LENSES.map((l,i)=>'<option value="'+l.id+'">'+(i+1)+' · '+l.label+'</option>').join('');
+$('#sbLens').onchange=e=>setLens(e.target.value);
+$('#seatPilot').onchange=e=>{bind.pilot=e.target.value||null;saveBind();pollInput(0);renderControls();};
+$('#seatCam').onchange=e=>{bind.camera=e.target.value||null;saveBind();pollInput(0);renderControls();};
+$('#calCam').onclick=()=>startCalib('camera');$('#calPil').onclick=()=>startCalib('pilot');
+$('#calSkip').onclick=()=>{if(calib.active)nextCalib();};$('#calCancel').onclick=cancelCalib;
+$('#calReset').onclick=()=>{bind={pilot:null,camera:null,calib:{camera:{},pilot:{}}};saveBind();renderControls();toast('Stick mapping reset to defaults.');};
+$('#bindTable').addEventListener('click',e=>{const b=e.target.closest('[data-inv]');if(!b)return;const [seat,f]=b.dataset.inv.split(':'),dev=seatDev[seat];if(!dev)return;
+  const m=JSON.parse(JSON.stringify(mapFor(seat,dev)));m[f].e=2*m[f].c-m[f].e;bind.calib[seat][dev.ckey]=m;saveBind();toast((seat==='camera'?'Camera ':'Pilot ')+f+' inverted.');});
+$('#btnDji').onclick=djiConnect;$('#btnDjiUsb').onclick=djiUsbConnect;
+$('#btnBridge').onclick=()=>{bridgeConnect(bridgeURL());renderControls();setTimeout(()=>{if(bridge.state!=='on')toast('No RC bridge found. Start it with: node rc-bridge.mjs');},2500);};
+$('#mainSlot').addEventListener('pointerdown',e=>{
+  if(!(S.mode==='run'||S.mode==='sandbox'||S.mode==='count')||!seats().camHuman)return;
+  vstick.active=true;vstick.id=e.pointerId;const r=$('#mainSlot').getBoundingClientRect();vstick.ox=e.clientX-r.left;vstick.oy=e.clientY-r.top;vstick.x=vstick.y=0;
+  const v=$('#vstick');v.hidden=false;v.style.left=vstick.ox+'px';v.style.top=vstick.oy+'px';v.firstElementChild.style.transform='';
+  try{$('#mainSlot').setPointerCapture(e.pointerId);}catch(err){}
+});
+$('#mainSlot').addEventListener('pointermove',e=>{if(!vstick.active||e.pointerId!==vstick.id)return;const r=$('#mainSlot').getBoundingClientRect();
+  let x=(e.clientX-r.left-vstick.ox)/60,y=-(e.clientY-r.top-vstick.oy)/60;const l=Math.hypot(x,y);if(l>1){x/=l;y/=l;}vstick.x=x;vstick.y=y;
+  $('#vstick').firstElementChild.style.transform='translate('+(x*42)+'px,'+(-y*42)+'px)';});
+const endStick=e=>{if(e.pointerId!==vstick.id)return;vstick.active=false;vstick.x=vstick.y=0;$('#vstick').hidden=true;};
+$('#mainSlot').addEventListener('pointerup',endStick);$('#mainSlot').addEventListener('pointercancel',endStick);
+window.addEventListener('keydown',e=>{
+  if(isTyping(e))return;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)&&e.target.tagName!=='BUTTON')e.preventDefault();
+  keys.add(e.code);
+  if(e.repeat)return;
+  if((e.code==='Space'||e.code==='Enter')&&e.target.tagName!=='BUTTON')confirmAction();
+  else if(e.code==='Escape'||e.code==='KeyP'){
+    if(!$('#controls').hidden||!$('#settings').hidden){$('#controls').hidden=$('#settings').hidden=true;cancelCalib();}
+    else if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();else if(S.mode==='brief'||S.mode==='results')goHome();}
+  else if(e.code==='KeyV'){S.swapPref=!S.swap;applyRoleView();}
+  else if(e.code==='KeyC')setGimbalProfile(settings.gimbalProfile+1,true);
+  else if(e.code==='KeyF'){const ids=FLIGHT_MODES.map(m=>m.id);setFlightMode(ids[(ids.indexOf(settings.flightMode)+1)%ids.length],true);}
+  else if(e.code==='KeyG'){settings.guides=!settings.guides;saveSettings();renderSettings();}
+  else if(S.mode==='sandbox'){
+    if(e.code==='KeyM')rec.on?stopRecord(true):startRecord();
+    else if(e.code==='BracketLeft'||e.code==='BracketRight'){S.sandSpeed=clamp(S.sandSpeed+(e.code==='BracketRight'?1:-1),0,25);$('#carSpeed').value=S.sandSpeed;$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);}
+    else if(/^Digit[1-6]$/.test(e.code)){const L=LENSES[+e.code.slice(5)-1];if(L){setLens(L.id);$('#sbLens').value=L.id;}}
+  }
+});
+window.addEventListener('keyup',e=>keys.delete(e.code));
+window.addEventListener('blur',()=>keys.clear());
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(S.mode==='run'||S.mode==='count'||S.mode==='sandbox'))pause();});
+window.addEventListener('gamepadconnected',()=>{pollInput(0);renderPadStatus();if(!$('#controls').hidden)renderControls();});
+window.addEventListener('gamepaddisconnected',()=>{pollInput(0);renderPadStatus();if(!$('#controls').hidden)renderControls();});
+setInterval(()=>{if(S.mode==='home')renderPadStatus();liveAxes();},250);
+
+/* ---------- Boot ---------- */
+$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);
+renderSettings();
+buildWorld(null);car.v=15;setLens('35');resetDroneBehindCar();
+loadUserMaps().then(()=>{const id=store.get('map','valley');if(id&&id!=='valley')useLocation(id);});
+S.mode='home';renderHome();applyRoleView();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
+if(/^https?:$/.test(location.protocol)&&/^(localhost|127\.0\.0\.1)$/.test(location.hostname))bridgeConnect(bridgeURL());
+requestAnimationFrame(t=>{last=t;loop(t);});
+})();
+</script>
+</body></html>
