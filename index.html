@@ -4,7 +4,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a field monitor. Letterboxed 16:9 camera feed on the left, an equipment rack (pilot FPV, map, live take stats) on the right. One dark theme on purpose: it is a monitor. */
+/* Layout: two choices. RC Plus (default): the camera feed fills the screen like DJI Pilot 2, the other camera is a picture-in-picture bottom right and the map bottom left.
+   Field monitor: letterboxed 16:9 feed on the left, an equipment rack (pilot FPV, map, live take stats) on the right. One dark theme on purpose: it is a monitor. */
 :root{
   --ink:#0c0e0f;--panel:#15181a;--panel-2:#1d2124;--line:#2a3034;--line-2:#3b4348;
   --fg:#ebe7dd;--muted:#959b99;--tally:#e5402c;--tally-ink:#fff6f2;
@@ -207,6 +208,20 @@ textarea{width:100%;min-height:90px;font:500 12px/1.4 var(--font-data);resize:ve
 code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--fg)}
 .toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:20;background:var(--fg);color:var(--ink);font:600 14px/1.2 var(--font-body);padding:10px 14px;border-radius:5px;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:calc(100% - 32px)}
 .fatal{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--ink);text-align:center}
+/* RC Plus layout. layout() places #side over the camera frame; narrow screens keep the stacked monitor layout. */
+#btnPanel{display:none}
+#app.rcplus{grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "main"}
+#app.rcplus #btnPanel{display:inline-block}
+#app.rcplus #side{grid-area:auto;position:absolute;z-index:2;display:block;padding:0;border:0;overflow:visible;pointer-events:none}
+#app.rcplus #side>*{position:absolute;pointer-events:auto}
+#app.rcplus #fpvSlot{right:10px;bottom:10px;width:clamp(180px,27%,480px);aspect-ratio:16/9;border:1px solid rgba(255,255,255,.4);border-radius:6px;box-shadow:0 6px 22px rgba(0,0,0,.55);cursor:pointer}
+#app.rcplus #mapSlot{left:10px;bottom:10px;width:clamp(140px,18%,300px);aspect-ratio:4/3;flex:none;min-height:0;border:1px solid rgba(255,255,255,.3);border-radius:6px;box-shadow:0 6px 22px rgba(0,0,0,.5)}
+#app.rcplus #live{left:10px;top:34px;width:min(290px,36%);max-height:calc(100% - var(--maph,0px) - 56px);overflow:auto;background:rgba(21,24,26,.92);display:none}
+#app.rcplus.panel #live{display:flex}
+#app.rcplus .tele{left:calc(var(--mapw,0px) + 18px);right:calc(var(--pipw,0px) + 18px)}
+#app.rcplus .zone{left:50%;transform:translateX(-50%);bottom:42px}
+#app.rcplus .pilotinfo{bottom:42px}
+#app.rcplus .gauge-v{top:40%}
 @media (max-width:820px),(max-aspect-ratio:1/1){
   #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"top" "main" "side"}
   #mainSlot{aspect-ratio:16/9}
@@ -231,6 +246,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
     <div class="brand"><span class="tally" aria-hidden="true"></span>Dual-Op <span class="soft">Trainer</span></div>
     <div id="slate" class="slate">STANDBY</div>
     <nav class="topnav">
+      <button class="btn ghost" id="btnPanel" type="button" title="Take panel (T)">Panel</button>
       <button class="btn ghost" id="btnShots" type="button">Shots</button>
       <button class="btn ghost" id="btnControls" type="button">Controls</button>
       <button class="btn ghost" id="btnSettings" type="button">Settings</button>
@@ -440,9 +456,11 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <dt>Drag on the picture</dt><dd>Virtual gimbal stick (mouse or touch)</dd>
         <dt>W S / A D</dt><dd>Pilot left stick: climb, descend / yaw (Mode 2)</dd>
         <dt>I K / J L</dt><dd>Pilot right stick: forward, back / left, right</dd>
+        <dt>Q / E</dt><dd>FPV camera tilt up / down (the pilot's left dial)</dd>
         <dt>Space or Enter</dt><dd>Roll camera, go again</dd>
         <dt>Esc or P</dt><dd>Cut (pause)</dd>
-        <dt>V</dt><dd>Swap main feed and FPV</dd>
+        <dt>V</dt><dd>Swap main feed and FPV (or click the small view)</dd>
+        <dt>T</dt><dd>RC Plus layout: show or hide the take panel</dd>
         <dt>G</dt><dd>Framing guides on and off</dd>
         <dt>C</dt><dd>Next gimbal rate profile (1, 2, 3)</dd>
         <dt>F</dt><dd>Next flight mode (T, N, S)</dd>
@@ -458,7 +476,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
     <section>
       <h3>Gimbal (camera op)</h3>
       <label class="field" for="setGimbalMode"><span>Gimbal mode</span><select id="setGimbalMode"><option value="free">Free: pan holds its heading when the aircraft yaws</option><option value="follow">Follow: pan turns with the aircraft</option></select></label>
-      <label class="field" for="setCamLayout"><span>Camera op sticks</span><select id="setCamLayout"><option value="right">Right stick only: pans and tilts</option><option value="split">Split: left stick pans, right stick tilts</option></select></label>
+      <label class="field" for="setCamLayout"><span>Camera op sticks</span><select id="setCamLayout"><option value="right">Right stick only: pans and tilts</option><option value="fpv">Right stick, FPV feel: push forward tilts down, sideways pans</option><option value="split">Split: left stick pans, right stick tilts</option></select></label>
       <div class="field"><span>Gimbal profile in use <b>C cycles them</b></span><div class="seg" id="gpTabs"></div></div>
       <label class="field" for="gpName"><span>Profile name</span><input type="text" id="gpName" maxlength="24"></label>
       <div class="cols">
@@ -487,6 +505,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
     </section>
     <section>
       <h3>Display</h3>
+      <label class="field" for="setScreen"><span>Screen layout</span><select id="setScreen"><option value="rcplus">RC Plus: full-screen camera, other view bottom right</option><option value="monitor">Field monitor: camera with a side rack</option></select></label>
       <label class="field" for="setUnits"><span>Units</span><select id="setUnits"><option value="imperial">Feet and mph</option><option value="metric">Metres and km/h</option></select></label>
       <label class="row" for="setGuides"><input type="checkbox" id="setGuides"> Thirds grid and safe area</label>
       <label class="row" for="setRing"><input type="checkbox" id="setRing"> Framing target ring</label>
@@ -517,6 +536,8 @@ const SPEC={
   tau:{T:.8,N:.45,S:.3},         // s velocity response lag, est.
   vUp:8,vDown:8,                 // m/s, published
   tiltMin:-90,tiltMax:30,        // deg controllable tilt (extension off), published
+  fpvTiltMin:-60,fpvTiltMax:20,  // deg FPV camera tilt, pitch-stabilised. DJI publishes no range: est.
+  fpvTiltRate:60,                // deg/s at full left dial, est.
   panLimit:300,                  // deg controllable pan either side of the nose, published
   sensorW:36,                    // mm, full-frame width
   ceilingAGL:121.9               // 400 ft
@@ -562,11 +583,12 @@ const FLIGHT_PROFILES={
   N:{vmax:SPEC.vmax.N,up:6,down:6,yaw:SPEC.yawMax.N,accel:SPEC.accel.N,expo:.3},
   S:{vmax:SPEC.vmax.S,up:8,down:8,yaw:SPEC.yawMax.S,accel:SPEC.accel.S,expo:.2}};
 const clone=o=>JSON.parse(JSON.stringify(o));
-const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',
+const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',screen:'rcplus',
   gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
 const settings=Object.assign(clone(DEFAULTS),store.get('settings',{}));
 if(!SPEC.vmax[settings.flightMode])settings.flightMode='N';
-if(!(settings.v>=2))settings.camLayout='right';
+if(!(settings.v>=2)||!['right','fpv','split'].includes(settings.camLayout))settings.camLayout='right';
+if(!['rcplus','monitor'].includes(settings.screen))settings.screen='rcplus';
 if(!(settings.v>=3)){settings.gimbalProfiles=clone(GIMBAL_PROFILES);settings.flightProfiles=clone(FLIGHT_PROFILES);settings.gimbalProfile=1;}
 settings.v=3;
 const gimbalProf=()=>settings.gimbalProfiles[settings.gimbalProfile]||settings.gimbalProfiles[1];
@@ -826,7 +848,6 @@ const ghost=new THREE.Group();
 /* ---------- Cameras ---------- */
 const camMain=new THREE.PerspectiveCamera(40,16/9,.5,6000);camMain.rotation.order='YXZ';
 const camFPV=new THREE.PerspectiveCamera(62,16/9,.5,6000);camFPV.rotation.order='YXZ';camFPV.layers.enable(1);
-const FPV_TILT=-10*DEG;
 function setFar(v){camMain.far=camFPV.far=v;camMain.updateProjectionMatrix();camFPV.updateProjectionMatrix();}
 const hfovOf=f=>2*Math.atan(SPEC.sensorW/(2*f));
 const vfovOf=f=>2*Math.atan(Math.tan(hfovOf(f)/2)*9/16);
@@ -890,7 +911,7 @@ function pickStart(sh){
 /* ---------- Simulation state ---------- */
 const S={mode:'home',role:store.get('role','camera'),shot:SANDBOX,t:0,cd:0,lensId:'35',focal:35,swap:false,split:false,
   sandSpeed:16,carStopped:false,take:0,fly:null,clearY:0,result:null,crash:null,pausedFrom:null};
-const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0};
+const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0,fpvTilt:-10*DEG};
 const gim={pan:0,tilt:0,panRate:0,tiltRate:0,prevW:0,prevT:0,rel:0};
 const P=new THREE.Vector3(),Pprev=new THREE.Vector3(),Vp=new THREE.Vector3(),Vprev=new THREE.Vector3(),Ap=new THREE.Vector3();
 const _v=new THREE.Vector3(),_w=new THREE.Vector3();
@@ -956,6 +977,10 @@ function pilotStep(dt,inp){
   const gh=terrainH(drone.pos.x,drone.pos.z);
   if(drone.pos.y-gh>SPEC.ceilingAGL){drone.pos.y=gh+SPEC.ceilingAGL;if(drone.vel.y>0)drone.vel.y=0;S.ceiling=true;}else S.ceiling=false;
 }
+// The pilot's left dial tilts the FPV camera. It is stabilised in pitch, so the picture stays level when the aircraft tilts.
+function fpvTiltStep(dt){
+  drone.fpvTilt=clamp(drone.fpvTilt+expo(input.pil.fpvTilt,.2,settings.deadband)*SPEC.fpvTiltRate*DEG*dt,SPEC.fpvTiltMin*DEG,SPEC.fpvTiltMax*DEG);
+}
 function droneVisual(dt){
   const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
   const af=drone.acc.x*fx+drone.acc.z*fz,ar=drone.acc.x*rx+drone.acc.z*rz,vf=drone.vel.x*fx+drone.vel.z*fz,vr=drone.vel.x*rx+drone.vel.z*rz;
@@ -990,7 +1015,7 @@ function autoCamStep(dt){
 function placeCameras(){
   camMain.position.copy(drone.pos).y-=.4;camMain.rotation.set(gim.tilt,gim.pan,0);
   camFPV.position.set(drone.pos.x-Math.sin(drone.yaw)*.3,drone.pos.y+.1,drone.pos.z-Math.cos(drone.yaw)*.3);
-  camFPV.rotation.set(drone.visPitch+FPV_TILT,drone.yaw,drone.visRoll);
+  camFPV.rotation.set(drone.fpvTilt,drone.yaw,drone.visRoll);
   camMain.updateMatrixWorld();camFPV.updateMatrixWorld();
 }
 
@@ -1051,9 +1076,9 @@ function computeResults(){
 
 /* ---------- Input: keyboard, pointer, controllers ---------- */
 const keys=new Set();
-const kb={pan:0,tilt:0,zoom:0,thr:0,yaw:0,pitch:0,roll:0};
+const kb={pan:0,tilt:0,zoom:0,thr:0,yaw:0,pitch:0,roll:0,fpvTilt:0};
 const vstick={active:false,id:null,ox:0,oy:0,x:0,y:0};
-const input={cam:{pan:0,tilt:0,zoom:0},pil:{thr:0,yaw:0,pitch:0,roll:0}};
+const input={cam:{pan:0,tilt:0,zoom:0},pil:{thr:0,yaw:0,pitch:0,roll:0,fpvTilt:0}};
 const isTyping=e=>/INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
 let bind=store.get('bind',null);
 if(!bind||!bind.calib)bind={pilot:null,camera:null,calib:{camera:{},pilot:{}}};
@@ -1085,15 +1110,16 @@ function bridgeConnect(url){
 }
 function cleanName(id){return(id||'Controller').replace(/\s*\((STANDARD GAMEPAD\s*)?Vendor:.*$/i,'').replace(/\s*\(.*?\)\s*$/,'').trim()||'Controller';}
 // Camera op defaults: "split" puts pan on the left stick and tilt on the right (the Inspire 2 dual-op layout).
-// DJI serial axes are [right H, right V, left V, left H, left dial], centred on 0.
+// "fpv" is the right-stick layout with the stick's tilt reversed, like pitch on an FPV radio: forward looks down.
+// DJI axes are [right H, right V, left V, left H, left dial, right dial], centred on 0. The left dial tilts the FPV camera.
 function defaultMap(seat,kind){
   const split=settings.camLayout==='split';
   if(kind==='dji')return seat==='camera'?{pan:{axis:split?3:0,c:0,e:1},tilt:{axis:1,c:0,e:1}}
-    :{thr:{axis:2,c:0,e:1},yaw:{axis:3,c:0,e:1},pitch:{axis:1,c:0,e:1},roll:{axis:0,c:0,e:1}};
+    :{thr:{axis:2,c:0,e:1},yaw:{axis:3,c:0,e:1},pitch:{axis:1,c:0,e:1},roll:{axis:0,c:0,e:1},fpvTilt:{axis:4,c:0,e:1}};
   return seat==='camera'?{pan:{axis:split?0:2,c:0,e:1},tilt:{axis:3,c:0,e:-1}}
     :{thr:{axis:1,c:0,e:-1},yaw:{axis:0,c:0,e:1},pitch:{axis:3,c:0,e:-1},roll:{axis:2,c:0,e:1}};
 }
-const mapFor=(seat,dev)=>dev?(bind.calib[seat][dev.ckey]||defaultMap(seat,dev.kind)):null;
+const mapFor=(seat,dev)=>dev?Object.assign(defaultMap(seat,dev.kind),bind.calib[seat][dev.ckey]):null;
 function seatDevices(devs){
   const pick=k=>k&&k!=='kb'?devs.find(d=>d.key===k)||null:null;
   let pil=pick(bind.pilot),cam=pick(bind.camera);
@@ -1115,11 +1141,11 @@ function pollInput(dt){
   const fine=keys.has('ShiftLeft')||keys.has('ShiftRight')?.35:1;
   kb.pan=kstep(kb.pan,kd('ArrowRight','ArrowLeft')*fine,dt);kb.tilt=kstep(kb.tilt,kd('ArrowUp','ArrowDown')*fine,dt);
   kb.thr=kstep(kb.thr,kd('KeyW','KeyS'),dt);kb.yaw=kstep(kb.yaw,kd('KeyD','KeyA'),dt);
-  kb.pitch=kstep(kb.pitch,kd('KeyI','KeyK'),dt);kb.roll=kstep(kb.roll,kd('KeyL','KeyJ'),dt);
+  kb.pitch=kstep(kb.pitch,kd('KeyI','KeyK'),dt);kb.roll=kstep(kb.roll,kd('KeyL','KeyJ'),dt);kb.fpvTilt=kstep(kb.fpvTilt,kd('KeyQ','KeyE'),dt);
   const cm=mapFor('camera',seatDev.camera),pm=mapFor('pilot',seatDev.pilot);
   input.cam.pan=clamp(axisVal(cm&&cm.pan,seatDev.camera)+kb.pan+(vstick.active?vstick.x:0),-1,1);
-  input.cam.tilt=clamp(axisVal(cm&&cm.tilt,seatDev.camera)+kb.tilt+(vstick.active?vstick.y:0),-1,1);
-  for(const f of ['thr','yaw','pitch','roll'])input.pil[f]=clamp(axisVal(pm&&pm[f],seatDev.pilot)+kb[f],-1,1);
+  input.cam.tilt=clamp(axisVal(cm&&cm.tilt,seatDev.camera)*(settings.camLayout==='fpv'?-1:1)+kb.tilt+(vstick.active?vstick.y:0),-1,1);
+  for(const f of ['thr','yaw','pitch','roll','fpvTilt'])input.pil[f]=clamp(axisVal(pm&&pm[f],seatDev.pilot)+kb[f],-1,1);
   padButtons(devs);
 }
 const prevBtn={};
@@ -1135,8 +1161,8 @@ function onPadButton(i){
 
 /* ---------- Stick setup (calibration) ---------- */
 const CAL_STEPS={
-  camera:[{fn:'pan',text:'PAN: push the stick fully RIGHT and hold'},{fn:'tilt',text:'TILT: push the stick fully UP (tilt up) and hold'}],
-  pilot:[{fn:'thr',text:'THROTTLE: push fully UP (climb) and hold'},{fn:'yaw',text:'YAW: push fully RIGHT and hold'},{fn:'pitch',text:'PITCH: push fully FORWARD (up) and hold'},{fn:'roll',text:'ROLL: push fully RIGHT and hold'}]
+  camera:[{fn:'pan',text:'PAN: push the stick fully RIGHT and hold'},{fn:'tilt',text:'TILT: push the stick fully UP (away from you) and hold'}],
+  pilot:[{fn:'thr',text:'THROTTLE: push fully UP (climb) and hold'},{fn:'yaw',text:'YAW: push fully RIGHT and hold'},{fn:'pitch',text:'PITCH: push fully FORWARD (up) and hold'},{fn:'roll',text:'ROLL: push fully RIGHT and hold'},{fn:'fpvTilt',text:'FPV TILT: turn the LEFT DIAL to tilt the camera UP and hold. No dial? Press Skip.'}]
 };
 const calib={active:false,seat:null,i:0,phase:'push',hold:0,base:null,cand:null,map:{},dev:null,used:new Set()};
 function startCalib(seat){
@@ -1381,7 +1407,7 @@ function stepWorld(dt){
   }
   const yaw0=drone.yaw;
   if(pilotHuman)pilotStep(dt,input.pil);else autoStep(dt);
-  droneVisual(dt);
+  droneVisual(dt);fpvTiltStep(dt);
   const dyaw=wrapPi(drone.yaw-yaw0);
   camMain.position.copy(drone.pos).y-=.4;
   if(camHuman)gimbalStep(dt,input.cam,dyaw);else autoCamStep(dt);
@@ -1429,7 +1455,7 @@ function hud(){
   el.zone.textContent=showZone?({on:'On the mark',near:'Close',framed:'Off the mark',lost:'Subject lost'})[SC.cam.zone]||'':'';
   const gh=terrainH(drone.pos.x,drone.pos.z),dc=Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z),hs=Math.hypot(drone.vel.x,drone.vel.z);
   if(++hudTick%3===0){
-    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO')+'</span><span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'');
+    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO')+'</span><span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span><span><em>FPV</em> '+sgn(drone.fpvTilt/DEG)+'°</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'');
     // Pilot's mark readout
     let pt='';
     if(st.pilotHuman&&sh.tolM>0&&(running||S.mode==='count'||S.mode==='brief')){
@@ -1474,7 +1500,7 @@ function drawSticks(){
   const st=seats();
   const a=$('#stCam').getContext('2d');a.clearRect(0,0,160,80);
   if(settings.camLayout==='split'){drawStick(a,40,40,30,input.cam.pan,0,st.camHuman);drawStick(a,120,40,30,0,input.cam.tilt,st.camHuman);}
-  else drawStick(a,120,40,30,input.cam.pan,input.cam.tilt,st.camHuman);
+  else drawStick(a,120,40,30,input.cam.pan,settings.camLayout==='fpv'?-input.cam.tilt:input.cam.tilt,st.camHuman);
   const b=$('#stPil').getContext('2d');b.clearRect(0,0,160,80);drawStick(b,40,40,30,input.pil.yaw,input.pil.thr,st.pilotHuman);drawStick(b,120,40,30,input.pil.roll,input.pil.pitch,st.pilotHuman);
 }
 
@@ -1507,30 +1533,40 @@ function drawMap(){
 
 /* ---------- Layout and render ---------- */
 let W=1,H=1,mainRect={x:0,y:0,w:0,h:0},fpvRect={x:0,y:0,w:0,h:0};
+// RC Plus layout: the take panel opens by itself in the sandbox (car and recording tools); T or Panel overrides
+const panelOpen=()=>S.panelPref!=null?S.panelPref:S.mode==='sandbox'||(S.mode==='paused'&&S.pausedFrom==='sandbox');
+function togglePanel(){S.panelPref=!panelOpen();applyRoleView();}
 function applyRoleView(){
   S.split=S.role==='dual'&&S.mode!=='home';S.swap=S.role==='pilot'&&S.mode!=='home'?(S.swapPref!=null?S.swapPref:true):(S.swapPref&&S.role!=='dual'?true:false);
   if(S.mode==='home')S.swap=false;
-  app.classList.toggle('split',S.split);app.classList.toggle('fpvmain',S.swap&&!S.split);
+  app.classList.toggle('split',S.split);app.classList.toggle('fpvmain',S.swap&&!S.split);app.classList.toggle('panel',panelOpen());
   $('#fpvLabel').textContent=S.swap?'CAM · X9':'FPV · PILOT';
   $('#sandTools').hidden=S.mode!=='sandbox'&&!(S.mode==='paused'&&S.pausedFrom==='sandbox');
   $('#liveTitle').textContent=S.mode==='sandbox'?'Sandbox':'Live take';
   $('#stCamLab').textContent=S.role==='pilot'?'CAMERA · AI OP':'CAMERA';$('#stPilLab').textContent=S.role==='camera'?'PILOT · AUTO':'PILOT';
   layout();
 }
+const narrowMQ=matchMedia('(max-width:820px),(max-aspect-ratio:1/1)');
 function layout(){
   const ar=app.getBoundingClientRect();W=Math.max(1,ar.width);H=Math.max(1,ar.height);
   renderer.setSize(W,H,false);
+  const rc=settings.screen==='rcplus'&&!narrowMQ.matches;app.classList.toggle('rcplus',rc);
   app.style.setProperty('--top-h',$('#top').offsetHeight+'px');
   const ms=$('#mainSlot').getBoundingClientRect(),mx=ms.left-ar.left,my=ms.top-ar.top;
   if(S.split){const gap=6;let w=Math.min((ms.width-gap)/2,ms.height*16/9),h=w*9/16;const x0=(ms.width-(2*w+gap))/2,y0=(ms.height-h)/2;
     fpvRect={x:mx+x0,y:my+y0,w,h};mainRect={x:mx+x0+w+gap,y:my+y0,w,h};}
-  else{let w=ms.width,h=w*9/16;if(h>ms.height){h=ms.height;w=h*16/9;}mainRect={x:mx+(ms.width-w)/2,y:my+(ms.height-h)/2,w,h};
-    const fs=$('#fpvSlot').getBoundingClientRect();fpvRect={x:fs.left-ar.left+1,y:fs.top-ar.top+1,w:Math.max(0,fs.width-2),h:Math.max(0,fs.height-2)};}
+  else mainRect=fit169(ms.width,ms.height,mx,my);
+  // RC Plus: the picture-in-picture and map sit inside the camera frame (the whole slot when split)
+  const side=$('#side'),sr=S.split?{x:mx,y:my,w:ms.width,h:ms.height}:mainRect;
+  if(rc){side.style.left=sr.x+'px';side.style.top=sr.y+'px';side.style.width=sr.w+'px';side.style.height=sr.h+'px';}else side.removeAttribute('style');
+  if(!S.split){const fs=$('#fpvSlot').getBoundingClientRect();fpvRect={x:fs.left-ar.left+1,y:fs.top-ar.top+1,w:Math.max(0,fs.width-2),h:Math.max(0,fs.height-2)};}
   const fr=el.frame;fr.style.left=(mainRect.x-mx)+'px';fr.style.top=(mainRect.y-my)+'px';fr.style.width=mainRect.w+'px';fr.style.height=mainRect.h+'px';
   const fh=$('#fpvHud');fh.style.left=(fpvRect.x-mx)+'px';fh.style.top=(fpvRect.y-my)+'px';fh.style.width=fpvRect.w+'px';fh.style.height=fpvRect.h+'px';
   $('#tiltGauge').style.setProperty('--zero',(SPEC.tiltMax/(SPEC.tiltMax-SPEC.tiltMin)*100)+'%');
   const mr=$('#mapSlot').getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);mapCv.width=Math.round(mr.width*dpr);mapCv.height=Math.round(mr.height*dpr);
+  app.style.setProperty('--pipw',(rc&&!S.split?fpvRect.w+2:0)+'px');app.style.setProperty('--mapw',(rc&&!S.split?mr.width:0)+'px');app.style.setProperty('--maph',(rc?mr.height:0)+'px');
 }
+function fit169(sw,sh,ox,oy){let w=sw,h=w*9/16;if(h>sh){h=sh;w=h*16/9;}return{x:ox+(sw-w)/2,y:oy+(sh-h)/2,w,h};}
 new ResizeObserver(()=>layout()).observe(app);
 window.addEventListener('resize',layout);
 function view(cam,r){
@@ -1901,9 +1937,9 @@ function renderControls(){
   else list.innerHTML=lastDevs.map(d=>'<div class="dev" data-dev="'+d.key+'"><header>'+esc(d.label)+' <span class="tag">'+({standard:'standard gamepad',generic:'joystick',dji:'DJI via USB serial','dji-adb':'DJI via RC bridge'})[d.kind]+'</span></header><div class="axes">'+
     Array.from(d.axes).map((v,i)=>'<div class="ax"><i></i><span>A'+i+'</span></div>').join('')+'</div>'+(d.kind==='dji'?'<div class="hint" data-djiinfo></div>':'')+'</div>').join('');
   seatOptions($('#seatPilot'),'pilot');seatOptions($('#seatCam'),'camera');
-  const fn={pan:'Pan',tilt:'Tilt',zoom:'Zoom',thr:'Throttle',yaw:'Yaw',pitch:'Pitch',roll:'Roll'},rows=[];
+  const fn={pan:'Pan',tilt:'Tilt',zoom:'Zoom',thr:'Throttle',yaw:'Yaw',pitch:'Pitch',roll:'Roll',fpvTilt:'FPV tilt (left dial)'},rows=[];
   for(const seat of ['camera','pilot']){const dev=seatDev[seat],m=mapFor(seat,dev);
-    for(const f of (seat==='camera'?['pan','tilt']:['thr','yaw','pitch','roll'])){const b=m&&m[f];
+    for(const f of (seat==='camera'?['pan','tilt']:['thr','yaw','pitch','roll','fpvTilt'])){const b=m&&m[f];
       rows.push('<tr><td>'+(seat==='camera'?'Camera':'Pilot')+' '+fn[f]+'</td><td>'+(dev?esc(dev.label)+' · axis '+(b?b.axis:'—'):'Keyboard')+'</td><td>'+(dev&&b?'<button class="btn small" type="button" data-inv="'+seat+':'+f+'">Invert</button>':'')+'</td></tr>');}}
   $('#bindTable').innerHTML='<thead><tr><th>Function</th><th>Source</th><th></th></tr></thead><tbody>'+rows.join('')+'</tbody>';
   const nSer=dji.list.filter(d=>d.ok).length+djiu.list.filter(d=>d.ok).length;
@@ -1951,10 +1987,11 @@ function renderSettings(){
     $('#'+id).value=gp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(gp[k]);}
   for(const [id,k,f] of [['fpVmax','vmax',spd],['fpYaw','yaw',v=>v+'°/s'],['fpUp','up',v=>(+v).toFixed(1)+' m/s'],['fpDown','down',v=>(+v).toFixed(1)+' m/s'],['fpAccel','accel',v=>(+v).toFixed(1)],['fpExpo','expo',v=>(+v).toFixed(2)]]){
     $('#'+id).value=fp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(fp[k]);}
-  $('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
+  $('#setScreen').value=s.screen;$('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
   app.classList.toggle('noguides',!s.guides);app.classList.toggle('noring',!s.ring);renderQuick();
 }
 function bindSetting(id,key,parse){$(id).addEventListener('input',e=>{settings[key]=parse(e.target);saveSettings();renderSettings();});}
+bindSetting('#setScreen','screen',t=>t.value);$('#setScreen').addEventListener('input',applyRoleView);
 bindSetting('#setGimbalMode','gimbalMode',t=>t.value);bindSetting('#setCamLayout','camLayout',t=>t.value);bindSetting('#setInvert','invertTilt',t=>t.checked);
 bindSetting('#setUnits','units',t=>t.value);bindSetting('#setGuides','guides',t=>t.checked);bindSetting('#setRing','ring',t=>t.checked);bindSetting('#setDeadband','deadband',t=>+t.value);
 for(const [id,k] of [['gpPanMax','panMax'],['gpTiltMax','tiltMax'],['gpPanSmooth','panSmooth'],['gpTiltSmooth','tiltSmooth'],['gpPanExpo','panExpo'],['gpTiltExpo','tiltExpo']])
@@ -1980,6 +2017,8 @@ $('#btnSettings').onclick=()=>openDrawer($('#settings').hidden?'settings':null);
 $('#btnShots').onclick=()=>{openDrawer(null);goHome();};
 $('#btnFull').onclick=()=>{try{const p=document.fullscreenElement?document.exitFullscreen():app.requestFullscreen();if(p&&p.catch)p.catch(()=>toast('Full screen is not available here.'));}catch(e){toast('Full screen is not available here.');}};
 $('#btnSwap').onclick=()=>{S.swapPref=!S.swap;applyRoleView();};
+$('#fpvSlot').addEventListener('click',e=>{if(app.classList.contains('rcplus')&&!e.target.closest('button')){S.swapPref=!S.swap;applyRoleView();}});
+$('#btnPanel').onclick=togglePanel;
 document.querySelectorAll('.role').forEach(b=>b.onclick=()=>{S.role=b.dataset.role;store.set('role',S.role);renderHome();applyRoleView();});
 $('#home').addEventListener('click',e=>{const c=e.target.closest('.shot');if(!c)return;const id=c.dataset.shot;if(id==='sandbox')startSandbox();else{const sh=shotById(id);if(sh)openBrief(sh);}});
 $('#bStart').onclick=roll;$('#bBack').onclick=goHome;
@@ -2034,6 +2073,7 @@ window.addEventListener('keydown',e=>{
     if(!$('#controls').hidden||!$('#settings').hidden){$('#controls').hidden=$('#settings').hidden=true;cancelCalib();}
     else if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();else if(S.mode==='brief'||S.mode==='results')goHome();}
   else if(e.code==='KeyV'){S.swapPref=!S.swap;applyRoleView();}
+  else if(e.code==='KeyT')togglePanel();
   else if(e.code==='KeyC')setGimbalProfile(settings.gimbalProfile+1,true);
   else if(e.code==='KeyF'){const ids=FLIGHT_MODES.map(m=>m.id);setFlightMode(ids[(ids.indexOf(settings.flightMode)+1)%ids.length],true);}
   else if(e.code==='KeyG'){settings.guides=!settings.guides;saveSettings();renderSettings();}
