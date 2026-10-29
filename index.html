@@ -499,9 +499,10 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <label class="field" for="fpUp"><span>Max climb <b id="vFpUp"></b></span><input type="range" id="fpUp" min="0.5" max="8" step="0.5"></label>
         <label class="field" for="fpDown"><span>Max descent <b id="vFpDown"></b></span><input type="range" id="fpDown" min="0.5" max="8" step="0.5"></label>
         <label class="field" for="fpAccel"><span>Responsiveness <b id="vFpAccel"></b></span><input type="range" id="fpAccel" min="1" max="12" step="0.5"></label>
-        <label class="field" for="fpExpo"><span>Stick EXP <b id="vFpExpo"></b></span><input type="range" id="fpExpo" min="0" max="0.9" step="0.01"></label>
+        <label class="field" for="fpExpo"><span>Pitch, throttle, yaw EXP <b id="vFpExpo"></b></span><input type="range" id="fpExpo" min="0" max="0.9" step="0.01"></label>
+        <label class="field" for="fpRollExpo"><span>Roll EXP <b id="vFpRollExpo"></b></span><input type="range" id="fpRollExpo" min="0" max="0.9" step="0.01"></label>
       </div>
-      <p class="hint">Capped at the Inspire 3's published limits: 26 m/s, 8 m/s climb and descent, 150&deg;/s yaw. Responsiveness is how hard it accelerates and brakes.</p>
+      <p class="hint">Capped at the Inspire 3's published limits: 26 m/s, 8 m/s climb and descent, 150&deg;/s yaw. Responsiveness is how hard it accelerates and brakes. Higher EXP softens small stick inputs around centre; roll has its own.</p>
     </section>
     <section>
       <h3>Display</h3>
@@ -579,9 +580,9 @@ const GIMBAL_PROFILES=[
   {name:'Medium',panMax:60,tiltMax:40,panSmooth:.35,tiltSmooth:.35,panExpo:.3,tiltExpo:.3},
   {name:'Fast',panMax:120,tiltMax:80,panSmooth:.15,tiltSmooth:.15,panExpo:.2,tiltExpo:.2}];
 const FLIGHT_PROFILES={
-  T:{vmax:SPEC.vmax.T,up:2,down:2,yaw:SPEC.yawMax.T,accel:SPEC.accel.T,expo:.35},
-  N:{vmax:SPEC.vmax.N,up:6,down:6,yaw:SPEC.yawMax.N,accel:SPEC.accel.N,expo:.3},
-  S:{vmax:SPEC.vmax.S,up:8,down:8,yaw:SPEC.yawMax.S,accel:SPEC.accel.S,expo:.2}};
+  T:{vmax:SPEC.vmax.T,up:2,down:2,yaw:SPEC.yawMax.T,accel:SPEC.accel.T,expo:.35,rollExpo:.6},
+  N:{vmax:SPEC.vmax.N,up:6,down:6,yaw:SPEC.yawMax.N,accel:SPEC.accel.N,expo:.3,rollExpo:.6},
+  S:{vmax:SPEC.vmax.S,up:8,down:8,yaw:SPEC.yawMax.S,accel:SPEC.accel.S,expo:.2,rollExpo:.5}};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',screen:'rcplus',
   gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
@@ -591,6 +592,7 @@ if(!(settings.v>=2)||!['right','fpv','split'].includes(settings.camLayout))setti
 if(!['rcplus','monitor'].includes(settings.screen))settings.screen='rcplus';
 if(!(settings.v>=3)){settings.gimbalProfiles=clone(GIMBAL_PROFILES);settings.flightProfiles=clone(FLIGHT_PROFILES);settings.gimbalProfile=1;}
 settings.v=3;
+for(const m in FLIGHT_PROFILES){const f=settings.flightProfiles[m];if(f&&f.rollExpo==null)f.rollExpo=FLIGHT_PROFILES[m].rollExpo;}
 const gimbalProf=()=>settings.gimbalProfiles[settings.gimbalProfile]||settings.gimbalProfiles[1];
 const flightProf=()=>settings.flightProfiles[settings.flightMode]||settings.flightProfiles.N;
 const saveSettings=()=>store.set('settings',settings);
@@ -911,6 +913,7 @@ function pickStart(sh){
 /* ---------- Simulation state ---------- */
 const S={mode:'home',role:store.get('role','camera'),shot:SANDBOX,t:0,cd:0,lensId:'35',focal:35,swap:false,split:false,
   sandSpeed:16,carStopped:false,take:0,fly:null,clearY:0,result:null,crash:null,pausedFrom:null};
+const FPV_PITCH_LEAK=.1;   // share of aircraft pitch the FPV camera's stabiliser lets through
 const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0,fpvTilt:-10*DEG};
 const gim={pan:0,tilt:0,panRate:0,tiltRate:0,prevW:0,prevT:0,rel:0};
 const P=new THREE.Vector3(),Pprev=new THREE.Vector3(),Vp=new THREE.Vector3(),Vprev=new THREE.Vector3(),Ap=new THREE.Vector3();
@@ -964,13 +967,13 @@ function autoStep(dt){
 function pilotStep(dt,inp){
   const fm=settings.flightMode,fp=flightProf(),vmax=Math.min(fp.vmax,SPEC.vmax.S),ex=x=>expo(x,fp.expo,settings.deadband);
   const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
-  const p=ex(inp.pitch)*vmax,r=ex(inp.roll)*vmax,thr=ex(inp.thr);
+  const p=ex(inp.pitch)*vmax,r=expo(inp.roll,fp.rollExpo,settings.deadband)*vmax,thr=ex(inp.thr);
   const tvx=fx*p+rx*r,tvz=fz*p+rz*r,tvy=thr>0?thr*Math.min(fp.up,SPEC.vUp):thr*Math.min(fp.down,SPEC.vDown);
-  const k=1-Math.exp(-dt/SPEC.tau[fm]);let dvx=(tvx-drone.vel.x)*k,dvz=(tvz-drone.vel.z)*k;
-  const lim=fp.accel*dt,l=Math.hypot(dvx,dvz);if(l>lim){dvx*=lim/l;dvz*=lim/l;}
-  drone.vel.x+=dvx;drone.vel.z+=dvz;
-  const dvy=(tvy-drone.vel.y)*(1-Math.exp(-dt/.35));drone.vel.y+=dvy;
-  drone.acc.set(dvx/dt,dvy/dt,dvz/dt);
+  // The aircraft has to lean before it accelerates, so acceleration builds over tau/3 instead of jumping: no lurch on small inputs
+  const tau=SPEC.tau[fm];let ax=(tvx-drone.vel.x)/tau,az=(tvz-drone.vel.z)/tau;const al=Math.hypot(ax,az);if(al>fp.accel){ax*=fp.accel/al;az*=fp.accel/al;}
+  const ka=1-Math.exp(-dt/(tau/3));drone.acc.x+=(ax-drone.acc.x)*ka;drone.acc.z+=(az-drone.acc.z)*ka;
+  drone.vel.x+=drone.acc.x*dt;drone.vel.z+=drone.acc.z*dt;
+  const dvy=(tvy-drone.vel.y)*(1-Math.exp(-dt/.35));drone.vel.y+=dvy;drone.acc.y=dvy/dt;
   const tyr=-ex(inp.yaw)*Math.min(fp.yaw,SPEC.yawMax.S)*DEG;drone.yawRate+=(tyr-drone.yawRate)*(1-Math.exp(-dt/.18));
   drone.yaw=wrapPi(drone.yaw+drone.yawRate*dt);
   drone.pos.addScaledVector(drone.vel,dt);
@@ -1015,7 +1018,7 @@ function autoCamStep(dt){
 function placeCameras(){
   camMain.position.copy(drone.pos).y-=.4;camMain.rotation.set(gim.tilt,gim.pan,0);
   camFPV.position.set(drone.pos.x-Math.sin(drone.yaw)*.3,drone.pos.y+.1,drone.pos.z-Math.cos(drone.yaw)*.3);
-  camFPV.rotation.set(drone.fpvTilt,drone.yaw,drone.visRoll);
+  camFPV.rotation.set(drone.fpvTilt+drone.visPitch*FPV_PITCH_LEAK,drone.yaw,drone.visRoll);
   camMain.updateMatrixWorld();camFPV.updateMatrixWorld();
 }
 
@@ -1987,7 +1990,7 @@ function renderSettings(){
   if(document.activeElement!==$('#gpName'))$('#gpName').value=gp.name;
   for(const [id,k,f] of [['gpPanMax','panMax',v=>v+'°/s'],['gpTiltMax','tiltMax',v=>v+'°/s'],['gpPanSmooth','panSmooth',v=>(+v).toFixed(2)],['gpTiltSmooth','tiltSmooth',v=>(+v).toFixed(2)],['gpPanExpo','panExpo',v=>(+v).toFixed(2)],['gpTiltExpo','tiltExpo',v=>(+v).toFixed(2)]]){
     $('#'+id).value=gp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(gp[k]);}
-  for(const [id,k,f] of [['fpVmax','vmax',spd],['fpYaw','yaw',v=>v+'°/s'],['fpUp','up',v=>(+v).toFixed(1)+' m/s'],['fpDown','down',v=>(+v).toFixed(1)+' m/s'],['fpAccel','accel',v=>(+v).toFixed(1)],['fpExpo','expo',v=>(+v).toFixed(2)]]){
+  for(const [id,k,f] of [['fpVmax','vmax',spd],['fpYaw','yaw',v=>v+'°/s'],['fpUp','up',v=>(+v).toFixed(1)+' m/s'],['fpDown','down',v=>(+v).toFixed(1)+' m/s'],['fpAccel','accel',v=>(+v).toFixed(1)],['fpExpo','expo',v=>(+v).toFixed(2)],['fpRollExpo','rollExpo',v=>(+v).toFixed(2)]]){
     $('#'+id).value=fp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(fp[k]);}
   $('#setScreen').value=s.screen;$('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
   app.classList.toggle('noguides',!s.guides);app.classList.toggle('noring',!s.ring);renderQuick();
@@ -1998,7 +2001,7 @@ bindSetting('#setGimbalMode','gimbalMode',t=>t.value);bindSetting('#setCamLayout
 bindSetting('#setUnits','units',t=>t.value);bindSetting('#setGuides','guides',t=>t.checked);bindSetting('#setRing','ring',t=>t.checked);bindSetting('#setDeadband','deadband',t=>+t.value);
 for(const [id,k] of [['gpPanMax','panMax'],['gpTiltMax','tiltMax'],['gpPanSmooth','panSmooth'],['gpTiltSmooth','tiltSmooth'],['gpPanExpo','panExpo'],['gpTiltExpo','tiltExpo']])
   $('#'+id).addEventListener('input',e=>{gimbalProf()[k]=+e.target.value;saveSettings();renderSettings();});
-for(const [id,k] of [['fpVmax','vmax'],['fpYaw','yaw'],['fpUp','up'],['fpDown','down'],['fpAccel','accel'],['fpExpo','expo']])
+for(const [id,k] of [['fpVmax','vmax'],['fpYaw','yaw'],['fpUp','up'],['fpDown','down'],['fpAccel','accel'],['fpExpo','expo'],['fpRollExpo','rollExpo']])
   $('#'+id).addEventListener('input',e=>{flightProf()[k]=+e.target.value;saveSettings();renderSettings();});
 $('#gpName').addEventListener('input',e=>{gimbalProf().name=e.target.value.slice(0,24)||'Profile '+(settings.gimbalProfile+1);saveSettings();renderSettings();});
 function setGimbalProfile(i,announce){settings.gimbalProfile=((i%3)+3)%3;saveSettings();renderSettings();if(announce)toast('Gimbal profile '+(settings.gimbalProfile+1)+': '+gimbalProf().name);}
