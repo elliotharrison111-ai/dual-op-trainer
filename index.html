@@ -410,6 +410,14 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
       <div class="field"><span>Car route</span><div class="seg" id="mmSrc"><button type="button" data-src="name">Road by name</button><button type="button" data-src="file">GPX, KML or GeoJSON</button><button type="button" data-src="draw">Draw on the photo</button></div></div>
       <label class="field" for="mmRoad" id="mmRoadRow"><span>Road name as the US Census lists it (e.g. Lone Mountain Trl, Gallatin Rd)</span><input id="mmRoad" type="text"></label>
       <input type="file" id="mmRouteFile" accept=".gpx,.kml,.geojson,.json" hidden>
+      <div class="cols">
+        <label class="row" for="mmDetailOn"><input type="checkbox" id="mmDetailOn"> Detail terrain patch (USGS lidar where it exists)</label>
+        <label class="field" for="mmDetailWhere"><span>Patch centre: lat, lon</span><input id="mmDetailWhere" type="text" spellcheck="false"></label>
+        <label class="field" for="mmDetailW"><span>Patch east-west, km</span><input id="mmDetailW" type="number" min="0.2" max="3" step="0.1" value="1"></label>
+        <label class="field" for="mmDetailH"><span>Patch north-south, km</span><input id="mmDetailH" type="number" min="0.2" max="3" step="0.1" value="1"></label>
+        <label class="field" for="mmDetailRes"><span>Patch spacing</span><select id="mmDetailRes"><option value="1">1 m</option><option value="2" selected>2 m</option><option value="4">4 m</option></select></label>
+      </div>
+      <div class="row"><label class="row" for="mmWater"><input type="checkbox" id="mmWater"> Rivers and lakes (US Census hydrography)</label><label class="row" for="mmBldg"><input type="checkbox" id="mmBldg"> Buildings (OpenStreetMap)</label></div>
       <canvas id="mmCanvas" width="960" height="480"></canvas>
       <div class="actions">
         <button class="btn" id="mmFetch" type="button">Load terrain and photo</button>
@@ -458,6 +466,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <dt>B</dt><dd>Back to the menu from the brief or results</dd>
         <dt>X</dt><dd>Next gimbal rate profile</dd>
         <dt>Y</dt><dd>Next flight mode (T, N, S, A)</dd>
+        <dt>LB</dt><dd>Cruise Control (as Z)</dd>
         <dt>View</dt><dd>Swap main feed and FPV</dd>
         <dt>Menu</dt><dd>Cut (pause) and resume</dd>
       </dl>
@@ -475,6 +484,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <dt>Esc or P</dt><dd>Cut (pause)</dd>
         <dt>V</dt><dd>Swap main feed and FPV (or click the small view)</dd>
         <dt>T</dt><dd>RC Plus layout: show or hide the take panel</dd>
+        <dt>Z</dt><dd>Cruise Control (N and S): hold a stick and press to lock it; press with the sticks centred to stop</dd>
         <dt>G</dt><dd>Framing guides on and off</dd>
         <dt>C</dt><dd>Next gimbal rate profile (1, 2, 3)</dd>
         <dt>F</dt><dd>Next flight mode (T, N, S, A)</dd>
@@ -502,7 +512,10 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <label class="field" for="gpTiltExpo"><span>Tilt EXP <b id="vGpTiltExpo"></b></span><input type="range" id="gpTiltExpo" min="0" max="0.9" step="0.01"></label>
       </div>
       <label class="row" for="setInvert"><input type="checkbox" id="setInvert"> Invert tilt</label>
-      <p class="hint">The RC Plus tops out at 270&deg;/s pan and 120&deg;/s tilt. Controllable tilt is &minus;90&deg; to +30&deg; and pan stops at 300&deg; either side of the nose.</p>
+      <label class="field" for="setGimCtl"><span>Gimbal controller</span><select id="setGimCtl"><option value="rcplus">DJI RC Plus: 270&deg;/s pan, 120&deg;/s tilt</option><option value="wheels">DJI Master Wheels: 432&deg;/s (via a High-Bright Remote Monitor)</option></select></label>
+      <label class="row" for="setGimExt"><input type="checkbox" id="setGimExt"> Gimbal tilt-limit extension</label>
+      <label class="field" for="setGear"><span>Landing gear</span><select id="setGear"><option value="up">Raised (360&deg; pan clear; extended tilt &minus;140&deg; to +75&deg;)</option><option value="down">Lowered (extended tilt &minus;115&deg; to +100&deg;)</option></select></label>
+      <p class="hint">Published Inspire 3 figures: tilt &minus;90&deg; to +30&deg; without the extension; pan stops at 300&deg; either side of the nose. DJI doesn't publish what the smoothness and EXP settings do mathematically, so the response curve here is an estimate.</p>
     </section>
     <section>
       <h3>Aircraft (pilot)</h3>
@@ -528,8 +541,16 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
       <p class="hint">The Inspire 3 is rated for 14 m/s (31 mph) in flight and 12 m/s for takeoff and landing. In T, N and S it leans into the wind and holds its spot; gusts knock it off briefly. In A mode nothing holds it, so it drifts with the wind. Wind is lighter near the ground.</p>
     </section>
     <section>
+      <h3>Physics</h3>
+      <label class="row" for="setPhys2"><input type="checkbox" id="setPhys2"> Physics v2 (beta, being validated)</label>
+      <label class="row" for="setChallenge"><input type="checkbox" id="setChallenge"> Challenge (v2, approximate): GNSS hold error &plusmn;0.5 m and rougher air near cliffs and buildings</label>
+      <label class="field" for="setAiImp"><span>AI pilot imperfection (v2)</span><select id="setAiImp"><option value="off">Off: flies the line perfectly</option><option value="low">Low: small reaction delay and stick wander</option><option value="high">High: noticeably human</option></select></label>
+      <p class="hint">v2 steps the physics at 240 Hz, makes the aircraft tilt before it accelerates so moves start smoothly, limits yaw and climb jerk, thins the air with altitude, and has the AI pilot fly the same model through virtual sticks, so it feels gusts and obeys the mode limits. Best scores are kept separately for v1 and v2.</p>
+    </section>
+    <section>
       <h3>Display</h3>
       <label class="field" for="setScreen"><span>Screen layout</span><select id="setScreen"><option value="rcplus">RC Plus: full-screen camera, other view bottom right</option><option value="monitor">Field monitor: camera with a side rack</option></select></label>
+      <label class="field" for="setFpvLens"><span>FPV lens</span><select id="setFpvLens"><option value="rect">Wide rectilinear (about 93&deg; across; lighter)</option><option value="fisheye">Fisheye, 161&deg; diagonal like the real FPV camera (heavier; projection approximate)</option></select></label>
       <label class="field" for="setUnits"><span>Units</span><select id="setUnits"><option value="imperial">Feet and mph</option><option value="metric">Metres and km/h</option></select></label>
       <label class="row" for="setGuides"><input type="checkbox" id="setGuides"> Thirds grid and safe area</label>
       <label class="row" for="setRing"><input type="checkbox" id="setRing"> Framing target ring</label>
@@ -562,11 +583,25 @@ const SPEC={
   dragK:.011,                    // 1/m quadratic drag, est.: about 37 deg of lean holds 26 m/s in still air
   vUp:8,vDown:8,                 // m/s, published
   tiltMin:-90,tiltMax:30,        // deg controllable tilt (extension off), published
-  fpvTiltMin:-60,fpvTiltMax:20,  // deg FPV camera tilt, pitch-stabilised. DJI publishes no range: est.
+  fpvTiltMin:-60,fpvTiltMax:45,  // deg FPV camera tilt range, gear up and level [SPEC, UM v3.0 p.39]. Stabilisation beyond the tilt axis is not published
   fpvTiltRate:60,                // deg/s at full left dial, est.
   panLimit:300,                  // deg controllable pan either side of the nose, published
   sensorW:36,                    // mm, full-frame width
   ceilingAGL:121.9               // 400 ft
+};
+// Physics v2 (Settings → Physics, default off until validated). Tags: [SPEC] published, [DERIVED] computed from
+// published values or physics, [ESTIMATED] my estimate (verify), [TUNED] chosen to match v1 behaviour or tests, not real flight data.
+const PHYS2={
+  hz:240,                                   // fixed physics rate, Hz [ESTIMATED: chosen for stability and smooth 144 Hz displays]
+  attRate:{T:40,N:100,S:200,A:150},         // deg/s max pitch/roll rate. S = published max angular velocity 200 [SPEC]; T, N, A [ESTIMATED]
+  attAcc:{T:300,N:700,S:1400,A:1000},       // deg/s^2 max pitch/roll angular acceleration [ESTIMATED]
+  attTau:{T:.35,N:.22,S:.14,A:.2},          // s attitude settle time [TUNED: sweep in docs/AUDIT.md trades 30% roll peak lean against speed overshoot]
+  rateTau:.03,                              // s inner rate loop [ESTIMATED]
+  yawAcc:{T:120,N:400,S:800,A:400},         // deg/s^2 yaw angular acceleration cap [ESTIMATED]
+  yawJerk:4000,                             // deg/s^3 [ESTIMATED]
+  vAcc:{T:2,N:4,S:6,A:4},                   // m/s^2 vertical acceleration cap [ESTIMATED]
+  vJerk:20,                                 // m/s^3 vertical jerk cap [ESTIMATED]
+  inputTau:.02                              // s stick reconstruction filter, about one 20 ms DJI stick poll [ESTIMATED]
 };
 const LENSES=[
   {id:'18',label:'DL 18mm F2.8 ASPH',f:18},
@@ -593,6 +628,8 @@ function hash2(i,j){let h=(Math.imul(i,374761393)+Math.imul(j,668265263))|0;h=Ma
 function vnoise(x,y){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
   const a=hash2(i,j),b=hash2(i+1,j),c=hash2(i,j+1),d=hash2(i+1,j+1);return(a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v)*2-1;}
 function fbm(x,y,o){let s=0,a=.5,f=1;for(let k=0;k<o;k++){s+=a*vnoise(x*f,y*f);f*=2.03;a*=.5;}return s;}
+// Uniform cubic B-spline: passes near (not through) the samples, continuous acceleration
+const bspline=(p0,p1,p2,p3,t)=>{const t2=t*t,t3=t2*t;return((1-t)*(1-t)*(1-t)*p0+(3*t3-6*t2+4)*p1+(-3*t3+3*t2+3*t+1)*p2+t3*p3)/6;};
 const catmull=(p0,p1,p2,p3,t)=>.5*(2*p1+(p2-p0)*t+(2*p0-5*p1+4*p2-p3)*t*t+(3*p1-p0-3*p2+p3)*t*t*t);
 function expo(x,e,dead){const a=Math.abs(x);if(a<=dead)return 0;const t=Math.min(1,(a-dead)/(1-dead));return Math.sign(x)*((1-e)*t+e*t*t*t);}
 
@@ -611,7 +648,7 @@ const FLIGHT_PROFILES={
   A:{vmax:SPEC.vmax.A,up:6,down:6,yaw:SPEC.yawMax.A,accel:SPEC.accel.A,expo:.3,rollExpo:.6}};
 const clone=o=>JSON.parse(JSON.stringify(o));
 const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',screen:'rcplus',
-  wind:{speed:0,dir:270,gust:'light'},gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
+  wind:{speed:0,dir:270,gust:'light'},physicsV2:false,aiImperfect:'low',challenge:false,fpvLens:'rect',gimbalCtl:'rcplus',gimbalExt:false,gear:'up',gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
 const settings=Object.assign(clone(DEFAULTS),store.get('settings',{}));
 if(!SPEC.vmax[settings.flightMode])settings.flightMode='N';
 if(!(settings.v>=2)||!['right','fpv','split'].includes(settings.camLayout))settings.camLayout='right';
@@ -627,7 +664,7 @@ const saveSettings=()=>store.set('settings',settings);
 /* ---------- World: road, terrain and trees, rebuilt per location (practice valley or an imported map) ---------- */
 const ROAD_W=8,LANE=1.9,A_LAT=3.6,GCELL=40,TCELL=16,gkey=(i,j)=>i*100003+j;
 const VALLEY_ROAD=[[0,0],[260,-60],[520,-10],[690,150],[660,360],[500,440],[360,560],[400,720],[300,850],[90,820],[-40,660],[-200,610],[-370,500],[-430,290],[-330,120],[-170,50]];
-let ROAD_N=1,ROAD_LEN=1,DS=1,roadDraw=1,nearIdx=0;
+let ROAD_N=1,ROAD_LEN=1,DS=1,roadDraw=1,nearIdx=0,ROAD_TURNS=[];   // turnarounds (s, metres) on out-and-back routes
 let RX=new Float32Array(1),RZ=new Float32Array(1),RY=new Float32Array(1),RH=new Float32Array(1),RK=new Float32Array(1),VLIM=new Float32Array(1);
 let rgrid=new Map(),trees=[],tgrid=new Map(),grid=null;
 let world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};
@@ -654,6 +691,7 @@ function buildRoad(pts,closed,groundAt){
   const w=Math.max(1,Math.round(20/DS));for(let i=0;i<ROAD_N;i++){let s=0;for(let k=-w;k<=w;k++)s+=g0[(i+k+ROAD_N)%ROAD_N];RY[i]=s/(2*w+1);}
   roadDraw=ROAD_N;
   if(!closed){const end=pts[pts.length-1];let best=1e18;for(let i=0;i<ROAD_N*.65;i++){const d=(RX[i]-end[0])**2+(RZ[i]-end[1])**2;if(d<best){best=d;roadDraw=i;}}}
+  ROAD_TURNS=closed?[]:[0,roadDraw*DS];
   rgrid=new Map();
   for(let i=0;i<roadDraw;i+=2){const k=gkey(Math.floor(RX[i]/GCELL),Math.floor(RZ[i]/GCELL));let L=rgrid.get(k);if(!L)rgrid.set(k,L=[]);L.push(i);}
 }
@@ -733,8 +771,9 @@ function buildValleyMesh(){
   const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true,map:grassTexture(SIZE/8,SIZE/8)}));m.receiveShadow=true;worldGroup.add(m);
 }
 // Real terrain: aerial imagery when the map has it, otherwise colour by elevation and slope
-function buildGridMesh(G,img){
+function buildGridMesh(G,img,hole){
   const sx=G.cx*(G.nx-1),sz=G.cz*(G.nz-1),g=new THREE.PlaneGeometry(sx,sz,G.nx-1,G.nz-1);g.rotateX(-Math.PI/2);
+  if(hole){const idx=[],n=G.nx;for(let iz=0;iz<G.nz-1;iz++)for(let ix=0;ix<G.nx-1;ix++){if(ix>=hole.ix0&&ix<hole.ix1&&iz>=hole.iz0&&iz<hole.iz1)continue;const a=ix+n*iz,b=ix+n*(iz+1),c=ix+1+n*(iz+1),d=ix+1+n*iz;idx.push(a,b,d,b,c,d);}g.setIndex(idx);}
   const p=g.attributes.position;
   for(let iz=0;iz<G.nz;iz++)for(let ix=0;ix<G.nx;ix++){const k=iz*G.nx+ix;p.setXYZ(k,G.x0+ix*G.cx,G.h[k],G.z0+iz*G.cz);}
   g.computeVertexNormals();
@@ -772,13 +811,15 @@ function buildTrees(R,img){
   if(img){iw=img.width;ih=img.height;px=img.getContext('2d').getImageData(0,0,iw,ih).data;}
   const forest=(x,z)=>{const u=Math.floor((x-TC.x+world.hx)/(2*world.hx)*iw),v=Math.floor((z-TC.z+world.hz)/(2*world.hz)*ih);if(u<0||v<0||u>=iw||v>=ih)return false;
     const o=(v*iw+u)*4,r=px[o],g=px[o+1],b=px[o+2],lum=(.299*r+.587*g+.114*b)/255;return lum<.3&&g>=r*.92&&g>=b*.95;};
-  const target=img?7000:2700;
+  // Towns: fewer trees, kept off the street edge (the photo's street trees are mostly deciduous; these pines are a stand-in)
+  const urban=bldgs.length>50,target=urban?2500:img?7000:2700;
   for(let k=0;k<target*8&&trees.length<target;k++){
     let x,z;
     if(img&&R()<.75){const i=Math.floor(R()*roadDraw),a=R()*TAU,rr=10+R()*480;x=RX[i]+Math.cos(a)*rr;z=RZ[i]+Math.sin(a)*rr;}
     else{x=TC.x+(R()*2-1)*hx;z=TC.z+(R()*2-1)*hz;}
     if(Math.abs(x-TC.x)>hx||Math.abs(z-TC.z)>hz)continue;
-    const d=roadDist(x,z);if(d<(img?10:16))continue;
+    const d=roadDist(x,z);if(d<(urban?14:img?10:16))continue;
+    if(bldgs.length&&buildingTop(x,z,4)>-Infinity)continue;
     if(img){if(!forest(x,z))continue;}else{const dens=fbm(x*.008+5,z*.008+2,3);if(dens<.02&&R()>.1)continue;}
     const h=terrainH(x,z);if(world.base==null?h>165:h+world.base>2900)continue;
     const H=img?9+R()*14:7+R()*11;trees.push({x,z,b:h-.3,H,r:H*(img?.1+R()*.05:.19+R()*.08)});
@@ -798,7 +839,7 @@ function buildTrees(R,img){
   im.castShadow=true;tm.castShadow=true;im.receiveShadow=true;worldGroup.add(im,tm);
 }
 function treesNear(x,z,fn){const ci=Math.floor(x/TCELL),cj=Math.floor(z/TCELL);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const L=tgrid.get(gkey(ci+a,cj+b));if(L)for(const t of L)fn(t);}}
-function clearanceAt(x,z){let top=terrainH(x,z);treesNear(x,z,t=>{if(Math.hypot(t.x-x,t.z-z)<t.r+6)top=Math.max(top,t.b+t.H);});return top;}
+function clearanceAt(x,z){let top=Math.max(terrainH(x,z),bldgs.length?buildingTop(x,z,8):-Infinity);treesNear(x,z,t=>{if(Math.hypot(t.x-x,t.z-z)<t.r+6)top=Math.max(top,t.b+t.H);});return top;}
 function treeHit(p){let hit=false;treesNear(p.x,p.z,t=>{if(hit||p.y<t.b||p.y>t.b+t.H)return;const r=t.r*(1-(p.y-t.b)/t.H)+.6;if(Math.hypot(t.x-p.x,t.z-p.z)<r)hit=true;});return hit;}
 function buildRanges(R){ // distant peaks around the practice valley
   const rock=new THREE.MeshLambertMaterial({color:0x6c7784,flatShading:true}),snow=new THREE.MeshLambertMaterial({color:0xf2f5f7,flatShading:true}),TC=world.TC;
@@ -812,6 +853,62 @@ function decodeHeights(b64,n){const bin=atob(b64),u8=new Uint8Array(bin.length);
 function encodeHeights(h){const i16=new Int16Array(h.length);for(let i=0;i<h.length;i++)i16[i]=clamp(Math.round(h[i]*10),-32768,32767);
   const u8=new Uint8Array(i16.buffer);let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s);}
 function imageToCanvas(src){return new Promise((res,rej)=>{if(src instanceof HTMLCanvasElement)return res(src);const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);res(c);};im.onerror=()=>rej(new Error('The map photo could not be decoded.'));im.src=src;});}
+/* ---------- Map packs v2: detail terrain patch, water, buildings ---------- */
+// Optional fields (v1 packs still load): detail {x0,z0,sizeX,sizeZ,nx,nz,h,imagery} heights relative to base, aligned to coarse grid lines;
+// water [{rings:[[[x,z],...]]}] areal hydrography; buildings [{p:[[x,z],...],h,roof,src}] footprints in local metres, height in metres.
+let detail=null,bldgs=[],bgrid=new Map();const BCELL=40;
+function detailAt(D,x,z){return gridAt(D,x,z);}
+function inDetail(x,z){return detail&&x>=detail.x0&&x<=detail.x0+detail.cx*(detail.nx-1)&&z>=detail.z0&&z<=detail.z0+detail.cz*(detail.nz-1);}
+// Fill polygon rings on a regular grid with even-odd scanlines; calls fn(ix,iz) for cells whose centre is inside
+function scanFill(rings,x0,z0,c,nx,nz,fn){
+  for(let iz=0;iz<nz;iz++){const z=z0+(iz+.5)*c,xs=[];
+    for(const ring of rings)for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>z)!==(b[1]>z))xs.push(a[0]+(z-a[1])/(b[1]-a[1])*(b[0]-a[0]));}
+    xs.sort((p,q)=>p-q);
+    for(let k=0;k+1<xs.length;k+=2){const i0=Math.max(0,Math.ceil((xs[k]-x0)/c-.5)),i1=Math.min(nx-1,Math.floor((xs[k+1]-x0)/c-.5));for(let ix=i0;ix<=i1;ix++)fn(ix,iz);}}
+}
+function buildWater(list){
+  const c=4,v=[],idx=[];const hx=world.hx,hz=world.hz,nx=Math.ceil(2*hx/c),nz=Math.ceil(2*hz/c),id=new Map();
+  const vert=(ix,iz)=>{const k=iz*(nx+1)+ix;let n=id.get(k);if(n==null){const x=-hx+ix*c,z=-hz+iz*c;n=v.length/3;v.push(x,terrainH(x,z)+.25,z);id.set(k,n);}return n;};
+  for(const w of list)scanFill(w.rings,-hx,-hz,c,nx,nz,(ix,iz)=>{const a=vert(ix,iz),b=vert(ix+1,iz),d=vert(ix,iz+1),e=vert(ix+1,iz+1);idx.push(a,d,b,b,d,e);});
+  if(!idx.length)return;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setIndex(idx);g.computeVertexNormals();
+  const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0x4f6b74,transparent:true,opacity:.72,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));m.receiveShadow=true;worldGroup.add(m);
+}
+function pointInPoly(p,x,z){let inside=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const a=p[i],b=p[j];if((a[1]>z)!==(b[1]>z)&&x<a[0]+(z-a[1])/(b[1]-a[1])*(b[0]-a[0]))inside=!inside;}return inside;}
+function buildBuildings(list){
+  bldgs=[];bgrid=new Map();if(!list||!list.length)return;
+  const pos=[],col=[],c=new THREE.Color(),pal=[0x8a6f5a,0x9b8b78,0x7d7468,0xa39a8c,0x6f6258,0xb0a492,0x857a6c];
+  const push=(x,y,z)=>{pos.push(x,y,z);col.push(c.r,c.g,c.b);};
+  list.forEach((b,bi)=>{
+    const p=b.p;if(!p||p.length<3||!(b.h>0))return;
+    let base=Infinity,x0=Infinity,x1=-Infinity,z0=Infinity,z1=-Infinity;for(const q of p){base=Math.min(base,terrainH(q[0],q[1]));x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);z0=Math.min(z0,q[1]);z1=Math.max(z1,q[1]);}
+    const top=base+b.h,B={p,base,top,x0,x1,z0,z1,roof:b.roof||'flat'};bldgs.push(B);
+    for(let ci=Math.floor(x0/BCELL);ci<=Math.floor(x1/BCELL);ci++)for(let cj=Math.floor(z0/BCELL);cj<=Math.floor(z1/BCELL);cj++){const k=gkey(ci,cj);let L=bgrid.get(k);if(!L)bgrid.set(k,L=[]);L.push(B);}
+    c.setHex(pal[bi%pal.length]);c.offsetHSL(0,0,((bi*37)%11-5)*.01);
+    // walls (outward winding either way: the material is double-sided)
+    for(let i=0;i<p.length;i++){const a=p[i],d=p[(i+1)%p.length];push(a[0],base-1,a[1]);push(d[0],base-1,d[1]);push(d[0],top,d[1]);push(a[0],base-1,a[1]);push(d[0],top,d[1]);push(a[0],top,a[1]);}
+    // roof: flat, or a simple ridge along the longer side of the bounding box for gabled/hipped tags
+    const sh=p.map(q=>new THREE.Vector2(q[0],q[1])),tri=THREE.ShapeUtils.triangulateShape(sh,[]);c.multiplyScalar(.82);
+    if(B.roof==='gabled'||B.roof==='hipped'){const rh=Math.min(4,Math.min(x1-x0,z1-z0)*.3),alongX=(x1-x0)>=(z1-z0),mid=alongX?(z0+z1)/2:(x0+x1)/2,half=alongX?(z1-z0)/2:(x1-x0)/2;
+      const ry=q=>top+rh*(1-Math.min(1,Math.abs((alongX?q[1]:q[0])-mid)/Math.max(half,.1)));for(const t of tri)for(const k of t)push(p[k][0],ry(p[k]),p[k][1]);}
+    else for(const t of tri)for(const k of t)push(p[k][0],top,p[k][1]);
+  });
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.computeVertexNormals();
+  const m=new THREE.Mesh(g,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}));m.castShadow=true;m.receiveShadow=true;worldGroup.add(m);
+}
+function buildingsNear(x,z,fn){const L=bgrid.get(gkey(Math.floor(x/BCELL),Math.floor(z/BCELL)));if(L)for(const b of L)fn(b);}
+function buildingHit(p){let hit=false;buildingsNear(p.x,p.z,b=>{if(!hit&&p.y<b.top+.3&&p.y>b.base-1&&p.x>=b.x0-.6&&p.x<=b.x1+.6&&p.z>=b.z0-.6&&p.z<=b.z1+.6&&pointInPoly(b.p,p.x,p.z))hit=true;});return hit;}
+function buildingTop(x,z,margin){let top=-Infinity;for(const [dx,dz] of [[0,0],[margin,0],[-margin,0],[0,margin],[0,-margin]])buildingsNear(x+dx,z+dz,b=>{if(x+dx>=b.x0&&x+dx<=b.x1&&z+dz>=b.z0&&z+dz<=b.z1&&pointInPoly(b.p,x+dx,z+dz))top=Math.max(top,b.top);});return top;}
+// 0..1: how close the aircraft is to a building (for the Challenge turbulence)
+function buildingNear(x,z,r){if(!bldgs.length)return 0;let best=Infinity;for(const [dx,dz] of [[0,0],[r,0],[-r,0],[0,r],[0,-r]])buildingsNear(x+dx,z+dz,b=>{const ex=Math.max(b.x0-x,0,x-b.x1),ez=Math.max(b.z0-z,0,z-b.z1);best=Math.min(best,Math.hypot(ex,ez));});return best===Infinity?0:clamp(1-best/r,0,1);}
+function buildDetailMesh(D,img){
+  const g=new THREE.PlaneGeometry(D.cx*(D.nx-1),D.cz*(D.nz-1),D.nx-1,D.nz-1);g.rotateX(-Math.PI/2);const p=g.attributes.position;
+  for(let iz=0;iz<D.nz;iz++)for(let ix=0;ix<D.nx;ix++){const k=iz*D.nx+ix;p.setXYZ(k,D.x0+ix*D.cx,D.h[k],D.z0+iz*D.cz);}
+  g.computeVertexNormals();let mat;
+  if(img){const tex=new THREE.CanvasTexture(img);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());tex.minFilter=THREE.LinearMipmapLinearFilter;mat=new THREE.MeshLambertMaterial({map:tex,color:0xb4b4b4,emissive:0x5c5c5c,emissiveMap:tex});}
+  else mat=new THREE.MeshLambertMaterial({color:0x7d7a6e});
+  const m=new THREE.Mesh(g,mat);m.receiveShadow=true;worldGroup.add(m);
+}
+
 let worldToken=0;
 async function buildWorld(def){
   const token=++worldToken;let img=null;
@@ -819,13 +916,13 @@ async function buildWorld(def){
   if(token!==worldToken)return false;
   disposeWorld();const R=rng(7);
   if(!def){
-    world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};grid=null;terrainH=valleyH;
+    world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};grid=null;terrainH=valleyH;detail=null;bldgs=[];bgrid=new Map();
     buildRoad(VALLEY_ROAD,true,()=>0);buildValleyMesh();buildRoadMeshes();buildTrees(R,null);buildRanges(R);
     scene.fog.near=380;scene.fog.far=2700;setFar(6000);
   }else{
     const nx=def.nx,nz=def.nz,raw=decodeHeights(def.h,nx*nz);
     const G={nx,nz,x0:-def.sizeX/2,z0:-def.sizeZ/2,cx:def.sizeX/(nx-1),cz:def.sizeZ/(nz-1),h:raw};
-    world={id:def.id,name:def.name,base:def.base,TC:{x:0,z:0},hx:def.sizeX/2,hz:def.sizeZ/2,credits:def.credits||'',lat:def.lat,lon:def.lon};
+    world={id:def.id,name:def.name,base:def.base,TC:{x:0,z:0},hx:def.sizeX/2,hz:def.sizeZ/2,credits:def.credits||'',lat:def.lat,lon:def.lon,attribution:def.attribution||[]};
     grid=G;terrainH=(x,z)=>gridAt(G,x,z);
     buildRoad(def.route,!!def.closed,terrainH);
     // Cut a bench for the road: flat at road height under it, blending back to the real ground over a few cells
@@ -833,7 +930,19 @@ async function buildWorld(def){
     for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){const x=G.x0+ix*G.cx,z=G.z0+iz*G.cz,d=roadDist(x,z);if(d>=bw+fade)continue;
       const k=iz*nx+ix,ry=RY[nearIdx]-.35;C[k]=ry+(raw[k]-ry)*smoothstep(bw,bw+fade,d);}
     grid={...G,h:C};const cut=grid;terrainH=(x,z)=>gridAt(cut,x,z);
-    buildGridMesh(grid,img);buildRoadMeshes();buildTrees(R,img);
+    // Detail patch: finer heights over part of the map, snapped to coarse grid lines so the seam matches exactly; edges blend to the coarse grid
+    detail=null;let hole=null;
+    if(def.detail){const d=def.detail,ix0=Math.round((d.x0-G.x0)/G.cx),iz0=Math.round((d.z0-G.z0)/G.cz),ix1=Math.round((d.x0+d.sizeX-G.x0)/G.cx),iz1=Math.round((d.z0+d.sizeZ-G.z0)/G.cz);
+      const Dh=decodeHeights(d.h,d.nx*d.nz),D={nx:d.nx,nz:d.nz,x0:G.x0+ix0*G.cx,z0:G.z0+iz0*G.cz,cx:(ix1-ix0)*G.cx/(d.nx-1),cz:(iz1-iz0)*G.cz/(d.nz-1),h:Dh};
+      const F=3*Math.max(G.cx,G.cz),X1=D.x0+D.cx*(D.nx-1),Z1=D.z0+D.cz*(D.nz-1);
+      for(let iz=0;iz<D.nz;iz++)for(let ix=0;ix<D.nx;ix++){const x=D.x0+ix*D.cx,z=D.z0+iz*D.cz,k=iz*D.nx+ix,e=Math.min(x-D.x0,X1-x,z-D.z0,Z1-z),w=smoothstep(0,F,e),cg=gridAt(grid,x,z);
+        let hv=cg+(Dh[k]-cg)*w;const rd=roadDist(x,z);if(rd<bw+fade){const ry=RY[nearIdx]-.35;hv=ry+(hv-ry)*smoothstep(bw,bw+fade*.5,rd);}Dh[k]=hv;}
+      detail=D;hole={ix0,iz0,ix1,iz1};const coarse=grid;terrainH=(x,z)=>inDetail(x,z)?gridAt(detail,x,z):gridAt(coarse,x,z);}
+    buildGridMesh(grid,img,hole);
+    if(detail){let dimg=null;if(def.detail.imagery)try{dimg=await imageToCanvas(def.detail.imagery);}catch(e){}if(token!==worldToken)return false;buildDetailMesh(detail,dimg);}
+    if(def.water&&def.water.length)buildWater(def.water);
+    buildBuildings(def.buildings);
+    buildRoadMeshes();buildTrees(R,img);
     const span=Math.max(def.sizeX,def.sizeZ);scene.fog.near=700;scene.fog.far=Math.max(3500,span*.8);setFar(Math.max(9000,span*1.6));
   }
   for(const k in startCache)delete startCache[k];for(const k in reqCache)delete reqCache[k];
@@ -905,7 +1014,44 @@ const BUILTIN=[
    brief:'The aircraft crosses the road low as the car blows past about 25 m away. Whip-pan and tilt through it.',
    frame:{tx:0,ty:0,tol:.18},speed:()=>18,path:null}
 ];
+// Drills (Phase 6). No regulator publishes numeric tolerances for these (the UK CAA GVC uses fault points set by each assessment
+// entity), so the boxes are set from what the flight model can do, each marked [ESTIMATED]. Paths are fixed to the ground.
+const DRILLS=[
+  {id:'d_hover',drill:'hover',name:'Drill: Hover Box (ATTI)',diff:2,lens:'24',dur:30,pick:'start',tolM:1.5,mode:'A',minWind:4,frame:{tx:0,ty:0,tol:.16},speed:()=>0,path:null,
+   brief:'Hold the aircraft inside the green 1.5 m box for 30 s in A mode, where nothing holds position. If the wind is calm a 4 m/s breeze is added for the drill. The 1.5 m box is a model-based tolerance, not a published standard.'},
+  {id:'d_fig8',drill:'fig8',name:'Drill: Figure 8, Nose Forward',diff:3,lens:'24',dur:44,pick:'start',tolM:4,mode:'N',frame:{tx:0,ty:0,tol:.16},speed:()=>0,path:null,
+   brief:'Follow the green mark round the figure 8 (about 4 m/s, crossing over the post) with the nose pointing where you are going, within 30°. Scored on the line, the nose and smoothness.'},
+  {id:'d_orbit',drill:'orbit',name:'Drill: Nose-in Orbit',diff:3,lens:'35',dur:40,pick:'start',tolM:4,mode:'N',frame:{tx:0,ty:0,tol:.16},speed:()=>0,path:null,
+   brief:'Circle the post at 30 m and 5 m/s with the nose pointed at it, within 20°. Roll and yaw together, the way a nose-in orbit is flown for real.'},
+  {id:'d_camfig8',drill:'camfig8',name:'Drill: Hold the Subject',diff:3,lens:'50',dur:44,pick:'start',tolM:4,mode:'N',frame:{tx:0,ty:0,tol:.15},speed:()=>0,path:null,
+   brief:'Camera op: keep the red post centred while the aircraft flies a figure 8 beside it. In the Camera Op seat the AI flies; in Dual your pilot does.'}];
+for(const d of DRILLS)BUILTIN.push(d);
 BUILTIN.forEach((s,i)=>s.no=i+1);
+// Where a drill sits: the flattest open spot near the road with no trees, chosen once per map
+const drillGroup=new THREE.Group();scene.add(drillGroup);drillGroup.visible=false;
+{const cone=new THREE.Mesh(new THREE.ConeGeometry(.6,1.6,10),new THREE.MeshLambertMaterial({color:0xf06a1c}));cone.position.y=.8;cone.name='cone';
+ const post=new THREE.Mesh(new THREE.CylinderGeometry(.25,.25,3,10),new THREE.MeshLambertMaterial({color:0xd8261c}));post.position.y=1.5;post.name='post';
+ for(const o of [cone,post])o.castShadow=true;drillGroup.userData={cone,post};}
+function drillSite(){
+  if(world.drill)return world.drill;let best=null;
+  for(let s=0;s<ROAD_LEN;s+=40){const r=roadAt(s),rx=Math.cos(r.yaw),rz=-Math.sin(r.yaw);
+    for(const off of [-70,-50,50,70]){const x=r.x+rx*off,z=r.z+rz*off;if(Math.abs(x-world.TC.x)>world.hx-60||Math.abs(z-world.TC.z)>world.hz-60)continue;
+      let lo=Infinity,hi=-Infinity,tr=0;for(let a=0;a<8;a++){const xx=x+Math.cos(a/8*TAU)*35,zz=z+Math.sin(a/8*TAU)*35,h=terrainH(xx,zz);lo=Math.min(lo,h);hi=Math.max(hi,h);}
+      treesNear(x,z,t=>{if(Math.hypot(t.x-x,t.z-z)<45)tr++;});buildingsNear(x,z,()=>tr+=5);
+      const cost=(hi-lo)+tr*3+Math.abs(off)*.01;if(!best||cost<best.cost)best={cost,x,z,yaw:r.yaw,rx,rz};}}
+  const A=new THREE.Vector3(best.x,terrainH(best.x,best.z),best.z),f=new THREE.Vector3(-Math.sin(best.yaw),0,-Math.cos(best.yaw)),r=new THREE.Vector3(best.rx,0,best.rz);
+  return world.drill={A,f,r};
+}
+function drillPath(sh,t,out){
+  const D=S.drill,A=D.A;
+  if(sh.drill==='hover')return out.copy(A).setY(A.y+15);
+  if(sh.drill==='orbit'){const th=t*5/30;return out.copy(A).addScaledVector(D.f,30*Math.cos(th)).addScaledVector(D.r,30*Math.sin(th)).setY(A.y+12);}
+  // Lemniscate of Bernoulli, a = 32 m (one lap about 168 m in 42 s, crossing over the post)
+  const w=TAU/42,sn=Math.sin(w*t),cs=Math.cos(w*t),d=1+sn*sn,a=32;return out.copy(A).addScaledVector(D.f,a*cs/d).addScaledVector(D.r,a*sn*cs/d).setY(A.y+12);
+}
+// What the camera frames: the car, or the drill's post
+function subjPos(out){if(S.drill&&S.shot&&S.shot.drill){const p=S.drill.post;return out.set(p.x,p.y+1.5,p.z);}return out.set(car.x,car.y+CAR_AIM_Y,car.z);}
+const _subj=new THREE.Vector3();
 const SANDBOX={id:'sandbox',name:'Sandbox',diff:0,lens:'35',dur:Infinity,pick:'start',tolM:0,no:0,
   brief:'No clock and no scorecard. Fly, frame and rehearse, then record a move as a new shot.',
   frame:{tx:0,ty:0,tol:.16},speed:()=>16,
@@ -931,6 +1077,9 @@ function pickStart(sh){
   let avg=0;for(let k=0;k<=10;k++)avg+=sh.speed(k/10)/11;
   const len=avg*sh.dur+80;let cand=[];
   for(let s=0;s<ROAD_LEN;s+=25){let k=0,n=0,lo=99;for(let d=0;d<len;d+=8){const i=ridx(s+d);k+=RK[i];lo=Math.min(lo,VLIM[i]);n++;}cand.push({s,k:k/n,lo});}
+  // never start a shot whose run passes an out-and-back turnaround (its hairpin would otherwise rank as the 'twistiest' road)
+  const nearTurn=c=>ROAD_TURNS.some(t=>{for(let d=-80;d<=len+80;d+=20)if(Math.abs(wrapS(c.s+d)-t)<20||Math.abs(wrapS(c.s+d)-t)>ROAD_LEN-20)return true;return false;});
+  const clear=cand.filter(c=>!nearTurn(c));if(clear.length)cand=clear;
   const ok=cand.filter(c=>c.lo>=5);if(ok.length)cand=ok;
   cand.sort((a,b)=>a.k-b.k);
   const pos={straight:0,mixed:.5,twisty:.85}[sh.pick]||0;
@@ -940,27 +1089,42 @@ function pickStart(sh){
 /* ---------- Simulation state ---------- */
 const S={mode:'home',role:store.get('role','camera'),shot:SANDBOX,t:0,cd:0,lensId:'35',focal:35,swap:false,split:false,
   sandSpeed:16,carStopped:false,take:0,fly:null,clearY:0,result:null,crash:null,pausedFrom:null};
-const FPV_PITCH_LEAK=.1;   // share of aircraft pitch the FPV camera's stabiliser lets through
+const FPV_PITCH_LEAK=.1;   // share of aircraft pitch the FPV camera's tilt stabiliser lets through [ESTIMATED, verify: DJI documents only a tilt axis]
 // acc: actual acceleration. cmd: the flight controller's lagged acceleration demand. ff: its running estimate of the wind
 // force it has to cancel. thrust: horizontal thrust (sets the lean). hold: the spot it holds with the sticks centred (GPS modes).
-const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,visPitch:0,visRoll:0,fpvTilt:-10*DEG,
-  cmd:{x:0,z:0},ff:{x:0,z:0},thrust:{x:0,z:0},hold:null};
+const drone={pos:new THREE.Vector3(),vel:new THREE.Vector3(),acc:new THREE.Vector3(),yaw:0,yawRate:0,yawAcc:0,visPitch:0,visRoll:0,fpvTilt:-10*DEG,
+  cmd:{x:0,z:0},ff:{x:0,z:0},thrust:{x:0,z:0},hold:null,dbg:{tvx:0,tvz:0,tvy:0}};
 const GRAV=9.81,FF_TAU=.8;   // s for the flight controller to cancel a change in wind, est.
 // Wind: the mean wind from Settings plus gusts (a random process with about 1.5 s memory), weaker near the ground
 const wind={x:0,z:0,gx:0,gz:0};
 const GUSTS={off:0,light:.15,strong:.35};
-const randn=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*Math.random());};
+let windRng=Math.random;   // gust and AI-wander random source; the self-tests swap in a seeded rng()
+const randn=()=>{let u=0;while(!u)u=windRng();return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*windRng());};
 function windStep(dt){
   const w=settings.wind,sd=w.speed>0?(GUSTS[w.gust]||0):0,sg=sd?sd*w.speed+.3:0,tg=1.5,q=Math.sqrt(2*dt/tg);
-  wind.gx+=-wind.gx/tg*dt+sg*q*randn();wind.gz+=-wind.gz/tg*dt+sg*q*randn();
+  const rough=phys2()&&settings.challenge?roughness():0;
+  wind.gx+=-wind.gx/tg*dt+sg*(1+rough)*q*randn();wind.gz+=-wind.gz/tg*dt+sg*(1+rough)*q*randn();
+  if(phys2()&&settings.challenge){const kg=Math.sqrt(2*dt/20),ge=.25;gnss.x+=-gnss.x/20*dt+ge*kg*randn();gnss.z+=-gnss.z/20*dt+ge*kg*randn();}else gnss.x=gnss.z=0;
   const agl=Math.max(1,drone.pos.y-terrainH(drone.pos.x,drone.pos.z)),hf=clamp(Math.pow(agl/10,.14),.6,1.25),a=w.dir*DEG;
   // dir is where the wind blows FROM (0 = north). World x is east and z is south, so the air moves the other way.
   wind.x=(-Math.sin(a)*w.speed+wind.gx)*hf;wind.z=(Math.cos(a)*w.speed+wind.gz)*hf;
+  airRho=rhoRatio(world.base!=null?world.base+drone.pos.y:drone.pos.y);
 }
+// Challenge (v2, Settings → Physics, off by default; approximate). GNSS hover accuracy is +/-0.5 m [SPEC, UM p.128], modelled as
+// slow noise (2 sigma 0.5 m, 20 s memory) [ESTIMATED shape]. Air near steep ground or buildings is rougher: gust spread x (1 + roughness),
+// roughness = local slope over +/-30 m capped at 1, plus nearby buildings [ESTIMATED, not sourced: no published Inspire 3 or
+// site turbulence data was found].
+const gnss={x:0,z:0};
+function roughness(){const x=drone.pos.x,z=drone.pos.z,d=30,sx=(terrainH(x+d,z)-terrainH(x-d,z))/(2*d),sz=(terrainH(x,z+d)-terrainH(x,z-d))/(2*d);
+  return clamp(Math.hypot(sx,sz)+(typeof buildingNear==='function'?buildingNear(x,z,40):0),0,1);}
 const _drag={x:0,z:0};
-function dragAcc(vx,vz){const ax=vx-wind.x,az=vz-wind.z,k=Math.hypot(ax,az)*SPEC.dragK;_drag.x=-ax*k;_drag.z=-az*k;return _drag;}
+// v2 scales drag with air density; SPEC.dragK is the sea-level value. The practice valley is treated as sea level.
+let airRho=1;
+function rhoRatio(altM){const T=15.04-.00649*altM,p=101.29*Math.pow((T+273.1)/288.08,5.256);return p/(.2869*(T+273.1))/1.225;}   // NASA Glenn Earth Atmosphere Model, troposphere, standard day [DERIVED]
+function dragAcc(vx,vz){const ax=vx-wind.x,az=vz-wind.z,k=Math.hypot(ax,az)*SPEC.dragK*(phys2()?airRho:1);_drag.x=-ax*k;_drag.z=-az*k;return _drag;}
 // The flight controller has already settled against the current wind (start of a take, reset)
-function settleFlight(){const d=dragAcc(drone.vel.x,drone.vel.z);drone.ff.x=-d.x;drone.ff.z=-d.z;drone.cmd.x=drone.cmd.z=0;drone.thrust.x=drone.ff.x;drone.thrust.z=drone.ff.z;drone.hold=null;}
+function settleFlight(){const d=dragAcc(drone.vel.x,drone.vel.z);drone.ff.x=-d.x;drone.ff.z=-d.z;drone.cmd.x=drone.cmd.z=0;drone.thrust.x=drone.ff.x;drone.thrust.z=drone.ff.z;drone.hold=null;
+  const tm=Math.hypot(drone.ff.x,drone.ff.z),ang=Math.atan(tm/GRAV);att.x=tm>1e-9?drone.ff.x/tm*ang:0;att.z=tm>1e-9?drone.ff.z/tm*ang:0;attW.x=attW.z=0;drone.yawAcc=0;drone.acc.y=0;}
 const compass=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((d%360)+360)%360/45)%8];
 const gim={pan:0,tilt:0,panRate:0,tiltRate:0,prevW:0,prevT:0,rel:0};
 const P=new THREE.Vector3(),Pprev=new THREE.Vector3(),Vp=new THREE.Vector3(),Vprev=new THREE.Vector3(),Ap=new THREE.Vector3();
@@ -972,10 +1136,11 @@ function setCtx(){const y=car.smYaw;ctx.p.set(car.x,car.y,car.z);ctx.f.set(-Math
 
 function rawPath(t,out){
   const sh=S.shot,u=sh.dur===Infinity?0:clamp(t/sh.dur,0,1);
+  if(sh.drill)return drillPath(sh,t,out);
   if(sh.id==='flyby'){out.copy(S.fly.Q).addScaledVector(S.fly.D,lerp(-160,160,u));out.y=Math.max(S.fly.Q.y,terrainH(out.x,out.z))+12;return out;}
   if(sh.custom){const n=sh.pts.length-1,f=clamp(t*10,0,n),i=Math.min(Math.floor(f),n-1),a=f-i;
     const p0=sh.pts[Math.max(i-1,0)],p1=sh.pts[i],p2=sh.pts[i+1],p3=sh.pts[Math.min(i+2,n)];
-    const A=catmull(p0[0],p1[0],p2[0],p3[0],a),B=catmull(p0[1],p1[1],p2[1],p3[1],a),C=catmull(p0[2],p1[2],p2[2],p3[2],a);
+    const sp=phys2()?bspline:catmull,A=sp(p0[0],p1[0],p2[0],p3[0],a),B=sp(p0[1],p1[1],p2[1],p3[1],a),C=sp(p0[2],p1[2],p2[2],p3[2],a);
     if(sh.ref==='world')return out.set(A,B,C);setCtx();return out.copy(ctx.rel(A,B,C));}
   setCtx();return out.copy(sh.path(u,ctx,t));
 }
@@ -993,7 +1158,7 @@ function setLens(id){const L=lensById(id);S.lensId=L.id;S.focal=L.f;applyFocal()
 function applyFocal(){camMain.fov=vfovOf(S.focal)/DEG;camMain.updateProjectionMatrix();}
 
 function aimAngles(tx,ty,out){
-  const dx=car.x-camMain.position.x,dy=car.y+CAR_AIM_Y-camMain.position.y,dz=car.z-camMain.position.z;
+  subjPos(_subj);const dx=_subj.x-camMain.position.x,dy=_subj.y-camMain.position.y,dz=_subj.z-camMain.position.z;
   const yaw=Math.atan2(-dx,-dz),pitch=Math.atan2(dy,Math.hypot(dx,dz)),hf=hfovOf(S.focal),vf=vfovOf(S.focal);
   out.pan=yaw+Math.atan(tx*Math.tan(hf/2));out.tilt=pitch-Math.atan(ty*Math.tan(vf/2));return out;
 }
@@ -1057,6 +1222,122 @@ function droneVisual(dt){
   drone.visRoll=damp(drone.visRoll,clamp(-Math.atan(ar/GRAV),-lim,lim),6,dt);
 }
 
+/* ---------- Physics v2 ---------- */
+// The same public table (SPEC, FLIGHT_PROFILES) drives it. Changes from v1, each measured in docs/AUDIT.md:
+// fixed PHYS2.hz steps with render interpolation; stick samples interpolated between frames and lightly filtered;
+// the aircraft tilts with rate- and acceleration-limited attitude dynamics, so tilt leads acceleration and jerk is bounded;
+// acceleration caps reconciled with g·tan(tilt limit); yaw and vertical are acceleration- and jerk-limited; drag scales
+// with air density; the AI pilot flies this same model through virtual sticks.
+const phys2=()=>!!settings.physicsV2;
+const att={x:0,z:0},attW={x:0,z:0};   // tilt vector (rad; points where the thrust pushes, world horizontal) and its rate
+const vtr={v:0,a:0},ytr={v:0,a:0};
+// Track a target rate with a first-order demand capped at aMax, reached with at most jMax jerk
+function jlTrack(st,target,tau,aMax,jMax,dt){const ad=clamp((target-st.v)/tau,-aMax,aMax);st.a+=clamp(ad-st.a,-jMax*dt,jMax*dt);st.v+=st.a*dt;}
+function attitudeStep(dt,fm,phx,phz){
+  const wMax=PHYS2.attRate[fm]*DEG,aMax=PHYS2.attAcc[fm]*DEG,tau=PHYS2.attTau[fm],tMax=SPEC.tiltLim[fm]*DEG;
+  let l=Math.hypot(phx,phz);if(l>tMax){phx*=tMax/l;phz*=tMax/l;}
+  let wx=(phx-att.x)/tau,wz=(phz-att.z)/tau;l=Math.hypot(wx,wz);if(l>wMax){wx*=wMax/l;wz*=wMax/l;}
+  let ax=(wx-attW.x)/PHYS2.rateTau,az=(wz-attW.z)/PHYS2.rateTau;l=Math.hypot(ax,az);if(l>aMax){ax*=aMax/l;az*=aMax/l;}
+  attW.x+=ax*dt;attW.z+=az*dt;l=Math.hypot(attW.x,attW.z);if(l>wMax){attW.x*=wMax/l;attW.z*=wMax/l;}
+  att.x+=attW.x*dt;att.z+=attW.z*dt;l=Math.hypot(att.x,att.z);if(l>tMax){att.x*=tMax/l;att.z*=tMax/l;}
+  // Horizontal thrust acceleration is g·tan(tilt) along the tilt direction (vertical thrust holds the weight)
+  const a=Math.hypot(att.x,att.z),T=GRAV*Math.tan(a);drone.thrust.x=a>1e-9?att.x/a*T:0;drone.thrust.z=a>1e-9?att.z/a*T:0;
+}
+function pilotStep2(dt,inp,fm){
+  fm=fm||settings.flightMode;const fp=settings.flightProfiles[fm]||flightProf(),db=settings.deadband,ex=x=>expo(x,fp.expo,db);
+  const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y),tMax=SPEC.tiltLim[fm]*DEG,tb=GRAV*Math.tan(tMax);
+  const thr=ex(inp.thr),tvy=thr>0?thr*Math.min(fp.up,SPEC.vUp):thr*Math.min(fp.down,SPEC.vDown),d=dragAcc(drone.vel.x,drone.vel.z);
+  let phx=0,phz=0;
+  if(fm==='A'){
+    // ATTI: the sticks set the lean angle and nothing holds position, so the aircraft drifts with the wind
+    const pa=expo(inp.pitch,fp.expo,db)*tMax,ra=expo(inp.roll,fp.rollExpo,db)*tMax;phx=fx*pa+rx*ra;phz=fz*pa+rz*ra;
+    drone.cmd.x=drone.cmd.z=drone.ff.x=drone.ff.z=0;drone.hold=null;drone.dbg.tvx=drone.dbg.tvz=NaN;
+  }else{
+    const vmax=Math.min(fp.vmax,SPEC.vmax.S),p=ex(inp.pitch)*vmax,r=expo(inp.roll,fp.rollExpo,db)*vmax;let tvx=fx*p+rx*r,tvz=fz*p+rz*r;
+    // Sticks centred: it brakes, then holds the spot on GPS and flies back if a gust pushes it off (as v1)
+    if(Math.abs(inp.pitch)>db||Math.abs(inp.roll)>db)drone.hold=null;
+    else if(!drone.hold){if(Math.hypot(drone.vel.x,drone.vel.z)<.5)drone.hold={x:drone.pos.x,z:drone.pos.z};}
+    else{let hx=(drone.hold.x+gnss.x-drone.pos.x)*.6,hz=(drone.hold.z+gnss.z-drone.pos.z)*.6;const hl=Math.hypot(hx,hz);if(hl>2){hx*=2/hl;hz*=2/hl;}tvx+=hx;tvz+=hz;}
+    drone.dbg.tvx=tvx;drone.dbg.tvz=tvz;
+    // Acceleration demand, capped at the lower of the mode's cap and what its tilt limit allows [DERIVED]
+    const tau=SPEC.tau[fm],cap=Math.min(fp.accel,tb);let ax=(tvx-drone.vel.x)/tau,az=(tvz-drone.vel.z)/tau;const al=Math.hypot(ax,az);if(al>cap){ax*=cap/al;az*=cap/al;}
+    drone.cmd.x=ax;drone.cmd.z=az;
+    const kf=1-Math.exp(-dt/FF_TAU);drone.ff.x+=(-d.x-drone.ff.x)*kf;drone.ff.z+=(-d.z-drone.ff.z)*kf;
+    let tx=ax+drone.ff.x,tz=az+drone.ff.z;const tm=Math.hypot(tx,tz);if(tm>tb){tx*=tb/tm;tz*=tb/tm;}
+    // The attitude the controller asks for; the airframe gets there at its own rate (attitudeStep), so tilt leads acceleration
+    const tl=Math.hypot(tx,tz),ang=Math.atan(tl/GRAV);if(tl>1e-9){phx=tx/tl*ang;phz=tz/tl*ang;}
+  }
+  attitudeStep(dt,fm,phx,phz);
+  drone.acc.x=drone.thrust.x+d.x;drone.acc.z=drone.thrust.z+d.z;
+  drone.vel.x+=drone.acc.x*dt;drone.vel.z+=drone.acc.z*dt;
+  vtr.v=drone.vel.y;vtr.a=drone.acc.y;jlTrack(vtr,tvy,.35,PHYS2.vAcc[fm],PHYS2.vJerk,dt);drone.vel.y=vtr.v;drone.acc.y=vtr.a;drone.dbg.tvy=tvy;
+  const tyr=-ex(inp.yaw)*Math.min(fp.yaw,SPEC.yawMax.S)*DEG;ytr.v=drone.yawRate;ytr.a=drone.yawAcc;
+  jlTrack(ytr,tyr,.18,PHYS2.yawAcc[fm]*DEG,PHYS2.yawJerk*DEG,dt);drone.yawRate=ytr.v;drone.yawAcc=ytr.a;
+  drone.yaw=wrapPi(drone.yaw+drone.yawRate*dt);
+  drone.pos.addScaledVector(drone.vel,dt);
+  const gh=terrainH(drone.pos.x,drone.pos.z);
+  if(drone.pos.y-gh>SPEC.ceilingAGL){drone.pos.y=gh+SPEC.ceilingAGL;if(drone.vel.y>0)drone.vel.y=0;S.ceiling=true;}else S.ceiling=false;
+}
+// v2 shows the attitude the model actually flies (no extra smoothing)
+function droneVisual2(){const y=drone.yaw,fx=-Math.sin(y),fz=-Math.cos(y),rx=Math.cos(y),rz=-Math.sin(y);
+  drone.visPitch=-(att.x*fx+att.z*fz);drone.visRoll=-(att.x*rx+att.z*rz);}
+
+// AI pilot v2: a path-following controller moving virtual sticks into the same flight model, in the mode the shot needs.
+// Human-like imperfection [ESTIMATED]: a reaction delay and slow stick wander, set in Settings → Physics.
+const AI_IMP={off:{noise:0,delay:0},low:{noise:.02,delay:.12},high:{noise:.05,delay:.25}};
+const aiNoise={pitch:0,roll:0,thr:0,yaw:0},aiBuf=[];let aiClock=0;
+function aiReset(){aiBuf.length=0;aiClock=0;for(const k in aiNoise)aiNoise[k]=0;}
+// Stick deflection that gives fraction y of full output through the EXP curve and deadband
+function invExpo(y,e,db){const a=Math.min(1,Math.abs(y));if(a<1e-6)return 0;let t=a;for(let i=0;i<10;i++){const f=(1-e)*t+e*t*t*t-a,df=(1-e)+3*e*t*t;t=clamp(t-f/df,0,1);}return Math.sign(y)*(db+t*(1-db));}
+function aiSticks(fm){
+  const fp=settings.flightProfiles[fm],db=settings.deadband,vmax=Math.min(fp.vmax,SPEC.vmax.S),tau=SPEC.tau[fm];
+  // Desired ground velocity: the mark's velocity, its acceleration fed forward through the velocity lag, and a pull onto the mark [TUNED]
+  let vx=Vp.x+Ap.x*tau+.9*(P.x-drone.pos.x),vz=Vp.z+Ap.z*tau+.9*(P.z-drone.pos.z);const vy=Vp.y+1.2*(P.y-drone.pos.y);
+  const hs=Math.hypot(vx,vz);if(hs>vmax){vx*=vmax/hs;vz*=vmax/hs;}
+  const y=drone.yaw,fwd=-Math.sin(y)*vx-Math.cos(y)*vz,rt=Math.cos(y)*vx-Math.sin(y)*vz;
+  const up=Math.min(fp.up,SPEC.vUp),dn=Math.min(fp.down,SPEC.vDown);
+  const tgt=S.drill&&S.shot.drill==='orbit'?Math.atan2(-(S.drill.A.x-drone.pos.x),-(S.drill.A.z-drone.pos.z)):Math.hypot(Vp.x,Vp.z)>3?Math.atan2(-Vp.x,-Vp.z):Math.atan2(-(car.x-drone.pos.x),-(car.z-drone.pos.z));
+  const ym=Math.min(fp.yaw,SPEC.yawMax.S)*DEG;
+  return{pitch:invExpo(fwd/vmax,fp.expo,db),roll:invExpo(rt/vmax,fp.rollExpo,db),thr:invExpo(clamp(vy>=0?vy/up:vy/dn,-1,1),fp.expo,db),
+    yaw:invExpo(clamp(-wrapPi(tgt-y)*1.6/ym,-1,1),fp.expo,db),fpvTilt:0};
+}
+function aiImperfect(st,dt){
+  const im=AI_IMP[settings.aiImperfect]||AI_IMP.low;aiClock+=dt;
+  for(const k in aiNoise){aiNoise[k]+=-aiNoise[k]/.6*dt+im.noise*Math.sqrt(2*dt/.6)*randn();st[k]=clamp(st[k]+aiNoise[k],-1,1);}
+  aiBuf.push({t:aiClock,s:st});while(aiBuf.length>1&&aiBuf[1].t<=aiClock-im.delay)aiBuf.shift();
+  return aiBuf[0].s;
+}
+function aiPilotStep2(dt){const fm=S.aiMode||'N';lastAiSt=aiImperfect(aiSticks(fm),dt);pilotStep2(dt,lastAiSt,fm);}
+const aiModeFor=sh=>sh===SANDBOX||!sh.dur||sh.dur===Infinity?'S':requiredSpeed(sh)>SPEC.vmax.N*.85?'S':'N';
+
+// Fixed-step world advance for v2: sticks are interpolated from last frame's sample to this frame's across the sub-steps,
+// then filtered; the drawn frame is interpolated between the last two physics states.
+const v2s={acc:0,prev:null,filt:null,steps:0,alpha:0};
+const STICKS={pil:['thr','yaw','pitch','roll','fpvTilt'],cam:['pan','tilt']};
+function snapInput(){return{pil:Object.assign({},input.pil),cam:Object.assign({},input.cam)};}
+const rPrev={},rCur={};
+function snapRender(o){o.px=drone.pos.x;o.py=drone.pos.y;o.pz=drone.pos.z;o.yaw=drone.yaw;o.vp=drone.visPitch;o.vr=drone.visRoll;o.ft=drone.fpvTilt;
+  o.gp=gim.pan;o.gt=gim.tilt;o.cx=car.x;o.cy=car.y;o.cz=car.z;o.cyaw=car.yaw;o.cp=car.pitch;}
+function applyRender(o){drone.pos.set(o.px,o.py,o.pz);drone.yaw=o.yaw;drone.visPitch=o.vp;drone.visRoll=o.vr;drone.fpvTilt=o.ft;gim.pan=o.gp;gim.tilt=o.gt;
+  car.x=o.cx;car.y=o.cy;car.z=o.cz;car.yaw=o.cyaw;car.pitch=o.cp;}
+function placeInterpolated(a){
+  snapRender(rCur);if(rPrev.px==null)return;
+  const L=(k,w)=>w?rPrev[k]+wrapPi(rCur[k]-rPrev[k])*a:rPrev[k]+(rCur[k]-rPrev[k])*a,o={};
+  for(const k in rCur)o[k]=L(k,k==='yaw'||k==='gp'||k==='cyaw');
+  applyRender(o);placeCameras();placeCarMesh(0);if(ghost.visible)ghost.position.copy(P);applyRender(rCur);
+}
+function advanceWorld2(dt,stepFn){
+  const h=1/PHYS2.hz,now=snapInput();if(!v2s.prev){v2s.prev=now;v2s.filt=snapInput();}
+  v2s.acc+=dt;let n=0;while(v2s.acc>=h-1e-12&&n<Math.ceil(.25*PHYS2.hz)){v2s.acc-=h;n++;}
+  const kf=1-Math.exp(-h/PHYS2.inputTau);
+  for(let k=1;k<=n;k++){
+    for(const g in STICKS)for(const f of STICKS[g]){const m=v2s.prev[g][f]+(now[g][f]-v2s.prev[g][f])*k/n;v2s.filt[g][f]+=(m-v2s.filt[g][f])*kf;input[g][f]=v2s.filt[g][f];}
+    if(k===n)snapRender(rPrev);
+    stepFn(h);
+  }
+  v2s.prev=now;v2s.steps=n;v2s.alpha=v2s.acc/h;
+}
+
 /* ---------- Gimbal ---------- */
 function gimbalStep(dt,inp,dyaw){
   const db=settings.deadband,gp=gimbalProf();
@@ -1065,8 +1346,9 @@ function gimbalStep(dt,inp,dyaw){
   gim.tiltRate+=(tt-gim.tiltRate)*(1-Math.exp(-dt/(.04+gp.tiltSmooth*.9)));
   gim.pan=wrapPi(gim.pan+gim.panRate*dt+(settings.gimbalMode==='follow'?dyaw:0));
   gim.tilt+=gim.tiltRate*dt;
-  if(gim.tilt>SPEC.tiltMax*DEG){gim.tilt=SPEC.tiltMax*DEG;if(gim.tiltRate>0)gim.tiltRate=0;}
-  if(gim.tilt<SPEC.tiltMin*DEG){gim.tilt=SPEC.tiltMin*DEG;if(gim.tiltRate<0)gim.tiltRate=0;}
+  const tl=gimTilt();
+  if(gim.tilt>tl.max*DEG){gim.tilt=tl.max*DEG;if(gim.tiltRate>0)gim.tiltRate=0;}
+  if(gim.tilt<tl.min*DEG){gim.tilt=tl.min*DEG;if(gim.tiltRate<0)gim.tiltRate=0;}
 }
 // The X9 pans +/-300 deg from the nose, not endlessly. Track the unwrapped angle and stop at the limit.
 function panLimit(){
@@ -1074,14 +1356,21 @@ function panLimit(){
   if(Math.abs(gim.rel)>lim){gim.rel=clamp(gim.rel,-lim,lim);gim.pan=wrapPi(drone.yaw+gim.rel);gim.panRate=0;S.panLimited=true;}else S.panLimited=false;
 }
 const resetRel=()=>{gim.rel=wrapPi(gim.pan-drone.yaw);};
+// Controllable gimbal tilt [SPEC, UM v3.0 p.63 and p.130]: -90..+30 without the tilt-limit extension; with it -115..+100 (gear down) or -140..+75 (gear up)
+function gimTilt(){return !settings.gimbalExt?{min:SPEC.tiltMin,max:SPEC.tiltMax}:settings.gear==='up'?{min:-140,max:75}:{min:-115,max:100};}
+// Gimbal speed caps [SPEC]: RC Plus 270 pan / 120 tilt deg/s; DJI Master Wheels 432 on every axis (only via a High-Bright Remote Monitor)
+const gimCaps=()=>settings.gimbalCtl==='wheels'?{pan:432,tilt:432}:{pan:270,tilt:120};
+// Residual angular vibration of the stabilised X9 [SPEC: +/-0.002 deg hovering, +/-0.004 deg flying, UM p.129]; v2 only. Slow noise, sigma = band/4 per axis [ESTIMATED shape]
+const vib={p:0,t:0,r:0};
+function vibStep(dt){const b=(Math.hypot(drone.vel.x,drone.vel.z)>.5?.004:.002)/4*DEG,k=Math.sqrt(2*dt/.05);for(const a of ['p','t','r'])vib[a]+=-vib[a]/.05*dt+b*k*randn();}
 function autoCamStep(dt){
   camMain.position.copy(drone.pos).y-=.4;
   const f=S.shot.frame;aimAngles(f.tx,f.ty,_aim);
   gim.pan=wrapPi(gim.pan+wrapPi(_aim.pan-gim.pan)*(1-Math.exp(-5*dt)));
-  gim.tilt=clamp(damp(gim.tilt,_aim.tilt,5,dt),SPEC.tiltMin*DEG,SPEC.tiltMax*DEG);gim.panRate=0;gim.tiltRate=0;
+  const tl=gimTilt();gim.tilt=clamp(damp(gim.tilt,_aim.tilt,5,dt),tl.min*DEG,tl.max*DEG);gim.panRate=0;gim.tiltRate=0;
 }
 function placeCameras(){
-  camMain.position.copy(drone.pos).y-=.4;camMain.rotation.set(gim.tilt,gim.pan,0);
+  camMain.position.copy(drone.pos).y-=.4;if(phys2())camMain.rotation.set(gim.tilt+vib.t,gim.pan+vib.p,vib.r);else camMain.rotation.set(gim.tilt,gim.pan,0);
   camFPV.position.set(drone.pos.x-Math.sin(drone.yaw)*.3,drone.pos.y+.1,drone.pos.z-Math.cos(drone.yaw)*.3);
   camFPV.rotation.set(drone.fpvTilt+drone.visPitch*FPV_PITCH_LEAK,drone.yaw,drone.visRoll);
   camMain.updateMatrixWorld();camFPV.updateMatrixWorld();
@@ -1093,7 +1382,7 @@ function newScore(){return{time:0,cam:{pts:0,on:0,lost:0,lostT:0,lostFlag:false,
 let SC=newScore();
 const seats=()=>({camHuman:S.role!=='pilot',pilotHuman:S.role!=='camera'});
 function frameZone(){
-  const f=S.shot.frame;_v.set(car.x,car.y+CAR_AIM_Y,car.z);
+  const f=S.shot.frame;subjPos(_v);
   _w.set(0,0,-1).applyQuaternion(camMain.quaternion);
   const ahead=_v.clone().sub(camMain.position).dot(_w)>0;
   _v.project(camMain);
@@ -1114,6 +1403,9 @@ function scoreStep(dt){
     SC.cam.alpha+=Math.min(a,3000)*dt;
     cz=({on:1,near:2,framed:3,lost:4})[fz.zone];
   }
+  if(pilotHuman&&(sh.drill==='fig8'||sh.drill==='orbit')){const hs=Math.hypot(drone.vel.x,drone.vel.z);let want=null,lim=30*DEG;
+    if(sh.drill==='orbit'){const A=S.drill.A;want=Math.atan2(-(A.x-drone.pos.x),-(A.z-drone.pos.z));lim=20*DEG;}else if(hs>1.5)want=Math.atan2(-drone.vel.x,-drone.vel.z);
+    if(want!=null){SC.pil.hdT=(SC.pil.hdT||0)+dt;if(Math.abs(wrapPi(want-drone.yaw))<lim)SC.pil.hd=(SC.pil.hd||0)+dt;}}
   if(pilotHuman&&sh.tolM>0){
     const d=drone.pos.distanceTo(P);SC.pil.d=d;
     const z=d<sh.tolM?'on':d<sh.tolM*2?'near':'off';
@@ -1134,7 +1426,9 @@ function computeResults(){
   if(camHuman){const c=SC.cam;r.cam={framing:c.pts/T*100,on:c.on/T*100,smooth:100*Math.exp(-(c.alpha/T)/SMOOTH_K_CAM),lost:c.lost};
     r.cam.score=clamp(.75*r.cam.framing+.25*r.cam.smooth-4*c.lost,0,100);}
   if(pilotHuman){const p=SC.pil;r.pil={line:p.pts/T*100,on:p.on/T*100,smooth:100*Math.exp(-(p.dev/T)/SMOOTH_K_PIL),close:p.close};
-    r.pil.score=clamp(.75*r.pil.line+.25*r.pil.smooth-8*p.close,0,100);}
+    r.pil.score=clamp(.75*r.pil.line+.25*r.pil.smooth-8*p.close,0,100);
+    if(S.shot.drill==='fig8'||S.shot.drill==='orbit'){r.pil.nose=p.hdT?(p.hd||0)/p.hdT*100:0;r.pil.score=clamp(.6*r.pil.line+.25*r.pil.nose+.15*r.pil.smooth,0,100);}
+    else if(S.shot.drill==='hover'){r.pil.score=clamp(.85*r.pil.line+.15*r.pil.smooth,0,100);}}
   r.score=r.cam&&r.pil?(r.cam.score+r.pil.score)/2:(r.cam||r.pil).score;
   if(S.crash)r.score=0;
   r.score=Math.round(r.score);r.grade=S.crash?'X':grade(r.score);
@@ -1160,7 +1454,7 @@ function devices(){
   const out=[];let gps=[];
   try{gps=navigator.getGamepads?Array.from(navigator.getGamepads()):[];}catch(e){padBlocked=true;}
   for(const g of gps){if(!g||g.connected===false)continue;
-    out.push({key:'gp'+g.index,ckey:g.id,label:cleanName(g.id),kind:g.mapping==='standard'?'standard':'generic',axes:g.axes,buttons:g.buttons.map(b=>b.value)});}
+    out.push({key:'gp'+g.index,ckey:g.id,label:cleanName(g.id),kind:g.mapping==='standard'?'standard':'generic',axes:g.axes,buttons:g.buttons.map(b=>b.value),ts:g.timestamp});}
   for(const d of dji.list)if(d.ok)out.push({key:d.key,ckey:'dji-serial',label:d.label,kind:'dji',axes:d.axes,buttons:[]});
   for(const d of djiu.list)if(d.ok)out.push({key:d.key,ckey:'dji-usb:'+(d.model||'rc'),label:d.label,kind:'dji',axes:d.axes,buttons:[]});
   for(const d of bridge.devices)out.push({key:'rcb:'+d.id,ckey:'rcb:'+d.model,label:d.model+' …'+String(d.id).slice(-4),kind:'dji-adb',axes:d.axes,buttons:d.buttons||[]});
@@ -1216,12 +1510,30 @@ function pollInput(dt){
   for(const f of ['thr','yaw','pitch','roll','fpvTilt'])input.pil[f]=clamp(axisVal(pm&&pm[f],seatDev.pilot)+kb[f],-1,1);
   // Gamepads have no dial: the triggers tilt the FPV camera (RT up, LT down) unless Stick setup mapped an axis
   const pd=seatDev.pilot;if(pd&&pd.kind==='standard'&&!(pm&&pm.fpvTilt))input.pil.fpvTilt=clamp(input.pil.fpvTilt+(pd.buttons[7]||0)-(pd.buttons[6]||0),-1,1);
+  pilRaw=Object.assign({},input.pil);cruiseApply(input.pil);
   padButtons(devs);
+}
+// Cruise Control [SPEC, UM v3.0 p.110-111]: press while holding a stick to lock that stick input and let go; once the sticks
+// re-centre, new input adds on top; pressing again while moving locks the new total; pressing with the sticks centred stops it
+// (the aircraft brakes and hovers). N and S only here (the manual lists N, S and F). Locks all four sticks [INFERRED from the
+// manual's spiral-ascent example; verify]. Keyboard Z, gamepad LB. DJI controller buttons are not readable over USB.
+const cruise={on:false,wait:false,lock:{pitch:0,roll:0,thr:0,yaw:0}},CRUISE_AX=['pitch','roll','thr','yaw'];let pilRaw={pitch:0,roll:0,thr:0,yaw:0};
+function cruiseToggle(raw,quiet){
+  raw=raw||pilRaw;const fm=settings.flightMode,db=settings.deadband,moving=CRUISE_AX.some(k=>Math.abs(raw[k]||0)>db),say=t=>{if(!quiet)toast(t);};
+  if(fm!=='N'&&fm!=='S'){cruise.on=false;say('Cruise Control works in N and S.');return;}
+  if(!moving){if(cruise.on){cruise.on=false;say('Cruise Control off: braking to a hover.');}else say('Hold a stick, then press to lock that speed.');return;}
+  for(const k of CRUISE_AX)cruise.lock[k]=clamp((cruise.on&&!cruise.wait?cruise.lock[k]:0)+(raw[k]||0),-1,1);
+  cruise.on=true;cruise.wait=true;say('Cruise Control on. Let go of the sticks.');
+}
+function cruiseApply(inp){
+  if(!cruise.on)return;if(settings.flightMode!=='N'&&settings.flightMode!=='S'){cruise.on=false;return;}
+  const db=settings.deadband;if(cruise.wait&&CRUISE_AX.every(k=>Math.abs(inp[k])<=db))cruise.wait=false;
+  for(const k of CRUISE_AX)inp[k]=cruise.wait?cruise.lock[k]:clamp(cruise.lock[k]+inp[k],-1,1);
 }
 const prevBtn={};
 function padButtons(devs){
   // Standard gamepads (Xbox layout): A go, B back, X gimbal profile, Y flight mode, View swap feeds, Menu pause
-  for(const d of devs){for(const i of (d.kind==='standard'?[0,1,2,3,8,9]:[0,1,9])){const k=d.key+':'+i,on=(d.buttons[i]||0)>.5;if(on&&!prevBtn[k])onPadButton(i);prevBtn[k]=on;}}
+  for(const d of devs){for(const i of (d.kind==='standard'?[0,1,2,3,4,8,9]:[0,1,9])){const k=d.key+':'+i,on=(d.buttons[i]||0)>.5;if(on&&!prevBtn[k])onPadButton(i);prevBtn[k]=on;}}
 }
 function onPadButton(i){
   if(calib.active)return;
@@ -1231,6 +1543,7 @@ function onPadButton(i){
   else if(i===2)setGimbalProfile(settings.gimbalProfile+1,true);
   else if(i===3){const ids=FLIGHT_MODES.map(m=>m.id);setFlightMode(ids[(ids.indexOf(settings.flightMode)+1)%ids.length],true);}
   else if(i===8){S.swapPref=!S.swap;applyRoleView();}
+  else if(i===4){if(seats().pilotHuman&&S.mode!=='home')cruiseToggle();}
 }
 
 /* ---------- Stick setup (calibration) ---------- */
@@ -1384,13 +1697,23 @@ function resetDroneBehindCar(){
   placeCameras();aimAngles(0,0,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;gim.panRate=gim.tiltRate=0;resetRel();
 }
 function prepareRun(sh){
-  S.shot=sh;S.t=0;S.crash=null;S.ceiling=false;SC=newScore();
+  drillRestore();S.shot=sh;S.t=0;S.crash=null;S.ceiling=false;SC=newScore();
+  if(sh.drill){const D=drillSite(),post=D.A.clone();if(sh.drill==='camfig8')post.addScaledVector(D.r,-35);S.drill={A:D.A,f:D.f,r:D.r,post};
+    S.drillPrev={mode:settings.flightMode,wind:clone(settings.wind)};if(seats().pilotHuman)settings.flightMode=sh.mode;
+    if(sh.minWind&&settings.wind.speed<sh.minWind)settings.wind={speed:sh.minWind,dir:settings.wind.dir,gust:'light'};
+    const {cone,post:pm}=drillGroup.userData;drillGroup.clear();drillGroup.add(pm);pm.position.set(post.x,terrainH(post.x,post.z)+1.5,post.z);
+    if(sh.drill==='fig8'||sh.drill==='camfig8')for(const sg of [-1,1]){const c=cone.clone(),x=D.A.x+D.f.x*sg*20,z=D.A.z+D.f.z*sg*20;c.position.set(x,terrainH(x,z)+.8,z);drillGroup.add(c);}
+    drillGroup.visible=true;}
   car.s=pickStart(sh);carPose(car);car.smYaw=car.yaw;car.v=Math.min(shotSpeed(sh,0,0),VLIM[ridx(car.s)]);
   if(sh.id==='flyby'){
     const c={s:car.s,v:car.v,x:0,y:0,z:0,yaw:car.yaw,smYaw:car.yaw,pitch:0};
     for(let t=0;t<sh.dur/2;t+=1/60)carStep(c,1/60,sh.speed(t/sh.dur));
-    const f={x:-Math.sin(c.yaw),z:-Math.cos(c.yaw)},y2=c.yaw+75*DEG;
-    S.fly={Q:new THREE.Vector3(c.x+f.x*25,c.y,c.z+f.z*25),D:new THREE.Vector3(-Math.sin(y2),0,-Math.cos(y2))};
+    const f={x:-Math.sin(c.yaw),z:-Math.cos(c.yaw)},Qx=c.x+f.x*25,Qz=c.z+f.z*25;
+    // Cross at 75 deg to the road, or shallower where the ground along the crossing climbs too much (canyons): the mark
+    // follows the terrain 12 m up, and a wall it can't out-climb would be unflyable
+    let y2=c.yaw+75*DEG;for(const ang of [75,60,45,30,20,12]){const yy=c.yaw+ang*DEG,dx=-Math.sin(yy),dz=-Math.cos(yy);let rise=0;
+      for(let d=-160;d<=160;d+=10)rise=Math.max(rise,terrainH(Qx+dx*d,Qz+dz*d)-c.y);y2=yy;if(rise<25)break;}
+    S.fly={Q:new THREE.Vector3(Qx,c.y,Qz),D:new THREE.Vector3(-Math.sin(y2),0,-Math.cos(y2))};
   }
   S.clearY=0;Vp.set(0,0,0);
   pathPoint(0,P,1);
@@ -1403,6 +1726,7 @@ function prepareRun(sh){
   const hs=Math.hypot(Vp.x,Vp.z);drone.yaw=hs>3?Math.atan2(-Vp.x,-Vp.z):Math.atan2(-(car.x-P.x),-(car.z-P.z));
   placeCameras();aimAngles(sh.frame.tx,sh.frame.ty,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;gim.panRate=gim.tiltRate=gim.prevW=gim.prevT=0;resetRel();
   placeCameras();placeCarMesh(0);
+  S.aiMode=aiModeFor(sh);aiReset();v2s.prev=null;rPrev.px=null;cruise.on=false;
   const {pilotHuman}=seats();ghost.visible=pilotHuman&&sh.tolM>0;ghost.position.copy(P);ghost.userData.shell.scale.setScalar(sh.tolM||1);
 }
 // Peak ground speed the move asks of the aircraft, from a quick 10 Hz dry run.
@@ -1434,17 +1758,19 @@ function roll(){
 function startSandbox(){
   S.shot=SANDBOX;S.mode='sandbox';S.t=0;S.crash=null;SC=newScore();ghost.visible=false;
   if(!lensById(S.lensId))setLens('35');
-  car.v=S.sandSpeed;resetDroneBehindCar();showOverlay(null);applyRoleView();$('#sbLens').value=S.lensId;
+  car.v=S.sandSpeed;resetDroneBehindCar();S.aiMode='S';aiReset();showOverlay(null);applyRoleView();$('#sbLens').value=S.lensId;
 }
 function finish(){
   stopRecord(false);S.mode='results';S.result=computeResults();
-  if(!S.crash){const best=store.get('best',{}),k=S.shot.id+':'+S.role;if(!(best[k]>=S.result.score)){best[k]=S.result.score;store.set('best',best);S.result.pb=true;}}
+  if(!S.crash&&!stBusy){const best=store.get(bestKey(),{}),k=S.shot.id+':'+S.role;if(!(best[k]>=S.result.score)){best[k]=S.result.score;store.set(bestKey(),best);S.result.pb=true;}}
   renderResults();showOverlay('results');$('#rRetry').focus();
 }
 function crash(why){if(S.mode==='sandbox'){toast('Crashed: '+why+'. Resetting behind the car.');resetDroneBehindCar();return;}S.crash=why;finish();}
 function pause(){if(S.mode==='paused')return;S.pausedFrom=S.mode;S.mode='paused';showOverlay('pause');$('#pResume').focus();}
 function resume(){if(S.mode!=='paused')return;S.mode=S.pausedFrom==='count'?'count':S.pausedFrom;showOverlay(null);}
-function goHome(){stopRecord(false);S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
+// Put back the flight mode and wind a drill borrowed
+function drillRestore(){if(S.drillPrev){settings.flightMode=S.drillPrev.mode;settings.wind=S.drillPrev.wind;S.drillPrev=null;}S.drill=null;drillGroup.visible=false;}
+function goHome(){stopRecord(false);drillRestore();S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
 function confirmAction(){if(S.mode==='brief'||S.mode==='results')roll();else if(S.mode==='paused')resume();}
 
 /* ---------- Move recording (sandbox) ---------- */
@@ -1482,8 +1808,9 @@ function stepWorld(dt){
     Ap.lerp(_w.copy(Vp).sub(Vprev).divideScalar(Math.max(dt,1e-3)),.15);Vprev.copy(Vp);
   }
   const yaw0=drone.yaw;windStep(dt);
-  if(pilotHuman)pilotStep(dt,input.pil);else autoStep(dt);
-  droneVisual(dt);fpvTiltStep(dt);
+  if(phys2()){if(pilotHuman)pilotStep2(dt,input.pil);else aiPilotStep2(dt);droneVisual2();}
+  else{if(pilotHuman)pilotStep(dt,input.pil);else autoStep(dt);droneVisual(dt);}
+  fpvTiltStep(dt);if(phys2())vibStep(dt);
   const dyaw=wrapPi(drone.yaw-yaw0);
   camMain.position.copy(drone.pos).y-=.4;
   if(camHuman)gimbalStep(dt,input.cam,dyaw);else autoCamStep(dt);
@@ -1494,16 +1821,19 @@ function stepWorld(dt){
     const gh=terrainH(drone.pos.x,drone.pos.z);
     if(drone.pos.y<gh+.6)crash('ground contact');
     else if(treeHit(drone.pos))crash('hit a tree');
+    else if(bldgs.length&&buildingHit(drone.pos))crash('hit a building');
     else if(Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z)<2.6)crash('contact with the car');
   }
   if(!demo&&S.mode!=='results')scoreStep(dt);
   if(rec.on)recStep(dt);
+  if(DEV&&devRec.on)devRec.step(dt);
   if(S.mode==='run'&&t>=sh.dur)finish();
 }
+const stepping=()=>S.mode==='home'||S.mode==='run'||S.mode==='sandbox';
 function update(dt){
-  pollInput(dt);calibStep(dt);
-  if(S.mode==='home'||S.mode==='run'||S.mode==='sandbox')stepWorld(dt);
-  else if(S.mode==='count'){S.cd-=dt;if(S.cd<=0){S.mode='run';S.t=0;}}
+  pollInput(dt);calibStep(dt);if(DEV)devRec.poll(performance.now());
+  if(stepping()){if(phys2()){advanceWorld2(dt,h=>{if(stepping())stepWorld(h);});placeInterpolated(v2s.alpha);}else{stepWorld(dt);v2s.steps=1;}}
+  else{v2s.prev=null;v2s.steps=0;if(S.mode==='count'){S.cd-=dt;if(S.cd<=0){S.mode='run';S.t=0;}}}
 }
 
 /* ---------- HUD ---------- */
@@ -1522,7 +1852,7 @@ function hud(){
   el.tc.textContent=timecode(running||S.mode==='sandbox'?S.t:0);
   el.lensTag.textContent=Math.round(S.focal)+'mm';
   const rel=gim.rel/DEG;el.pan.style.left=(50-rel/(2*SPEC.panLimit)*100)+'%';el.panB.textContent='PAN '+sgn(-rel)+'°';
-  const td=gim.tilt/DEG,span=SPEC.tiltMax-SPEC.tiltMin;el.tilt.style.top=((SPEC.tiltMax-td)/span*100)+'%';el.tiltB.style.top=((SPEC.tiltMax-td)/span*100)+'%';el.tiltB.textContent=sgn(td,1)+'°';
+  const tl=gimTilt(),td=gim.tilt/DEG,span=tl.max-tl.min;el.tilt.style.top=((tl.max-td)/span*100)+'%';el.tiltB.style.top=((tl.max-td)/span*100)+'%';el.tiltB.textContent=sgn(td,1)+'°';
   // Target ring
   if(mainRect.h){const f=sh.frame;el.ring.style.left=((f.tx+1)/2*mainRect.w)+'px';el.ring.style.top=((1-f.ty)/2*mainRect.h)+'px';const d=f.tol*mainRect.h;el.ring.style.width=el.ring.style.height=d+'px';}
   const showZone=(running||S.mode==='sandbox')&&st.camHuman;
@@ -1531,7 +1861,7 @@ function hud(){
   el.zone.textContent=showZone?({on:'On the mark',near:'Close',framed:'Off the mark',lost:'Subject lost'})[SC.cam.zone]||'':'';
   const gh=terrainH(drone.pos.x,drone.pos.z),dc=Math.hypot(drone.pos.x-car.x,drone.pos.y-car.y-1,drone.pos.z-car.z),hs=Math.hypot(drone.vel.x,drone.vel.z);
   if(++hudTick%3===0){
-    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO')+'</span><span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span><span><em>FPV</em> '+sgn(drone.fpvTilt/DEG)+'°</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'')+(settings.wind.speed>0?'<span><em>WIND</em> '+fmtSpd(Math.hypot(wind.x,wind.z))+' '+compass(settings.wind.dir)+'</span>':'');
+    el.tele.innerHTML='<span><em>H</em> '+fmtLen(drone.pos.y-gh)+'</span><span><em>D</em> '+fmtLen(dc)+'</span><span><em>HS</em> '+fmtSpd(hs)+'</span><span><em>VS</em> '+sgn(drone.vel.y,1)+' m/s</span><span><em>CAR</em> '+fmtSpd(car.v)+'</span><span><em>MODE</em> '+(st.pilotHuman&&S.mode!=='home'?settings.flightMode:'AUTO'+(phys2()?' '+(S.aiMode||'N'):''))+'</span>'+(phys2()?'<span><em>PHYS</em> v2</span>':'')+'<span><em>GIMBAL</em> '+(settings.gimbalMode==='free'?'FREE':'FOLLOW')+' P'+(settings.gimbalProfile+1)+'</span><span><em>FPV</em> '+sgn(drone.fpvTilt/DEG)+'°</span>'+(world.base!=null?'<span><em>ALT</em> '+fmtLen(drone.pos.y+world.base)+' MSL</span>':'')+(cruise.on?'<span><em>CRUISE</em> '+(cruise.wait?'set':'on')+'</span>':'')+(settings.wind.speed>0?'<span><em>WIND</em> '+fmtSpd(Math.hypot(wind.x,wind.z))+' '+compass(settings.wind.dir)+'</span>':'');
     // Pilot's mark readout
     let pt='';
     if(st.pilotHuman&&sh.tolM>0&&(running||S.mode==='count'||S.mode==='brief')){
@@ -1606,6 +1936,9 @@ function drawMap(){
     g.strokeStyle=g.fillStyle='#cfe3ff';g.lineWidth=2*dpr;g.beginPath();g.moveTo(ax-ux*L,ay-uz*L);g.lineTo(ax+ux*L,ay+uz*L);g.stroke();
     g.beginPath();g.moveTo(ax+ux*L,ay+uz*L);g.lineTo(ax+ux*(L-6*dpr)-uz*4*dpr,ay+uz*(L-6*dpr)+ux*4*dpr);g.lineTo(ax+ux*(L-6*dpr)+uz*4*dpr,ay+uz*(L-6*dpr)-ux*4*dpr);g.closePath();g.fill();
     g.font=(10*dpr)+'px IBM Plex Mono, monospace';g.textAlign='right';g.fillText(fmtSpd(ws),w-6*dpr,ay+L+14*dpr);g.textAlign='left';}
+  // data attribution on real maps (OpenStreetMap needs to be visible where its data is shown)
+  if(world.attribution&&world.attribution.length){g.font=(9*dpr)+'px IBM Plex Mono, monospace';g.fillStyle='rgba(235,231,221,.75)';g.textAlign='right';
+    g.fillText(world.attribution.some(a=>/OpenStreetMap/.test(a.text))?'USGS · Census · © OpenStreetMap contributors':'USGS · US Census',w-6*dpr,h-6*dpr);g.textAlign='left';}
   // scale bar
   const unit=imperial()?{m:30.48*(span>220?5:2),t:(span>220?500:200)+' ft'}:{m:span>220?150:50,t:(span>220?150:50)+' m'};
   g.strokeStyle='#959b99';g.fillStyle='#959b99';g.lineWidth=1*dpr;const bx=8*dpr,by=h-10*dpr;g.beginPath();g.moveTo(bx,by);g.lineTo(bx+unit.m*k,by);g.stroke();
@@ -1643,15 +1976,40 @@ function layout(){
   if(!S.split){const fs=$('#fpvSlot').getBoundingClientRect();fpvRect={x:fs.left-ar.left+1,y:fs.top-ar.top+1,w:Math.max(0,fs.width-2),h:Math.max(0,fs.height-2)};}
   const fr=el.frame;fr.style.left=(mainRect.x-mx)+'px';fr.style.top=(mainRect.y-my)+'px';fr.style.width=mainRect.w+'px';fr.style.height=mainRect.h+'px';
   const fh=$('#fpvHud');fh.style.left=(fpvRect.x-mx)+'px';fh.style.top=(fpvRect.y-my)+'px';fh.style.width=fpvRect.w+'px';fh.style.height=fpvRect.h+'px';
-  $('#tiltGauge').style.setProperty('--zero',(SPEC.tiltMax/(SPEC.tiltMax-SPEC.tiltMin)*100)+'%');
+  {const tl=gimTilt();$('#tiltGauge').style.setProperty('--zero',(tl.max/(tl.max-tl.min)*100)+'%');}
   const mr=$('#mapSlot').getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);mapCv.width=Math.round(mr.width*dpr);mapCv.height=Math.round(mr.height*dpr);
   app.style.setProperty('--pipw',(rc&&!S.split?fpvRect.w+2:0)+'px');app.style.setProperty('--mapw',(rc&&!S.split?mr.width:0)+'px');app.style.setProperty('--maph',(rc?mr.height:0)+'px');
 }
 function fit169(sw,sh,ox,oy){let w=sw,h=w*9/16;if(h>sh){h=sh;w=h*16/9;}return{x:ox+(sw-w)/2,y:oy+(sh-h)/2,w,h};}
 new ResizeObserver(()=>layout()).observe(app);
 window.addEventListener('resize',layout);
+// FPV fisheye: the published FPV field of view is 161 deg diagonal [SPEC], wider than a perspective camera can draw cleanly.
+// Render a cube map at the FPV camera, then remap it with an equidistant fisheye (corner of the frame = 80.5 deg off axis).
+// DJI doesn't publish the lens projection, so equidistant is an approximation. Settings → Display → FPV lens.
+const fish={rt:null,cube:null,size:0,scene:null,cam:null,mat:null};
+function fishSetup(size){
+  if(fish.size===size)return;if(fish.rt)fish.rt.dispose();
+  fish.rt=new THREE.WebGLCubeRenderTarget(size,{format:THREE.RGBAFormat,generateMipmaps:false,minFilter:THREE.LinearFilter});
+  if(!fish.cube){fish.cube=new THREE.CubeCamera(.5,6000,fish.rt);fish.cube.children.forEach(c=>c.layers.enable(1));scene.add(fish.cube);}else fish.cube.renderTarget=fish.rt;
+  if(!fish.scene){fish.scene=new THREE.Scene();fish.cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+    fish.mat=new THREE.ShaderMaterial({uniforms:{env:{value:null},rot:{value:new THREE.Matrix3()},aspect:{value:16/9},halfAng:{value:80.5*DEG}},depthTest:false,depthWrite:false,
+      vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
+      fragmentShader:'uniform samplerCube env;uniform mat3 rot;uniform float aspect;uniform float halfAng;varying vec2 vUv;'+
+        'void main(){vec2 p=(vUv*2.-1.);p.x*=aspect;float r=length(p)/length(vec2(aspect,1.));float th=r*halfAng;float ph=atan(p.y,p.x);'+
+        'vec3 d=vec3(sin(th)*cos(ph),sin(th)*sin(ph),-cos(th));vec3 w=rot*d;gl_FragColor=textureCube(env,w);}'});
+    {const q=new THREE.Mesh(new THREE.PlaneGeometry(2,2),fish.mat);q.frustumCulled=false;fish.scene.add(q);}}
+  fish.mat.uniforms.env.value=fish.rt.texture;fish.size=size;
+}
+function viewFisheye(r){
+  const size=Math.min(1024,Math.max(256,2**Math.ceil(Math.log2(r.h))));fishSetup(size);
+  fish.cube.position.copy(camFPV.position);fish.cube.rotation.set(0,0,0);fish.cube.updateMatrixWorld();sky.position.copy(camFPV.position);
+  renderer.setScissorTest(false);fish.cube.update(renderer,scene);renderer.setScissorTest(true);renderer.setRenderTarget(null);
+  fish.mat.uniforms.rot.value.setFromMatrix4(camFPV.matrixWorld);fish.mat.uniforms.aspect.value=r.w/r.h;
+  const y=H-r.y-r.h;renderer.setViewport(r.x,y,r.w,r.h);renderer.setScissor(r.x,y,r.w,r.h);renderer.render(fish.scene,fish.cam);
+}
 function view(cam,r){
   if(r.w<2||r.h<2)return;
+  if(cam===camFPV&&settings.fpvLens==='fisheye'){viewFisheye(r);return;}
   cam.aspect=r.w/r.h;cam.updateProjectionMatrix();sky.position.copy(cam.position);
   const y=H-r.y-r.h;renderer.setViewport(r.x,y,r.w,r.h);renderer.setScissor(r.x,y,r.w,r.h);renderer.render(scene,cam);
 }
@@ -1667,7 +2025,8 @@ function render(){
 let last=performance.now();
 function loop(now){
   const dt=Math.min(.05,Math.max(.001,(now-last)/1000));last=now;
-  try{update(dt);hud();render();}catch(e){console.error(e);}
+  if(stBusy){requestAnimationFrame(loop);return;}
+  try{update(dt);hud();render();if(DEV)devRec.frame(dt,v2s.steps,now);}catch(e){console.error(e);}
   requestAnimationFrame(loop);
 }
 
@@ -1677,7 +2036,9 @@ function showOverlay(id){for(const o of OVERLAYS)$('#'+o).hidden=o!==id;}
 let toastT=0;
 function toast(msg,ms=4200){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,ms);}
 const pips=d=>'<span class="pips" aria-label="Difficulty '+d+' of 4">'+'●'.repeat(d)+'<s>'+'●'.repeat(4-d)+'</s></span>';
-function bestLine(id){const b=store.get('best',{})[id+':'+S.role];return b==null?'<span>No takes yet</span>':'<span>Best ('+({camera:'camera op',pilot:'pilot',dual:'dual'})[S.role]+')</span><b>'+b+' · '+grade(b)+'</b>';}
+// Best scores are kept per physics version so v1 and v2 takes are never compared
+const bestKey=()=>phys2()?'best.p2':'best';
+function bestLine(id){const b=store.get(bestKey(),{})[id+':'+S.role];return b==null?'<span>No takes yet</span>':'<span>Best ('+({camera:'camera op',pilot:'pilot',dual:'dual'})[S.role]+')</span><b>'+b+' · '+grade(b)+'</b>';}
 function shotCard(sh){
   const L=lensById(sh.lens),spd=sh.custom?sh.spd.reduce((a,b)=>a+b,0)/sh.spd.length:(()=>{let a=0;for(let k=0;k<=10;k++)a+=sh.speed(k/10)/11;return a;})();
   return '<button class="shot" type="button" data-shot="'+sh.id+'"><div class="shot-top"><span>SHOT '+shotNo(sh)+'</span>'+(sh.custom?'<span>CUSTOM · '+(sh.ref==='world'?'FIXED LINE':'CAR-RELATIVE')+'</span>':pips(sh.diff))+'</div>'+
@@ -1734,7 +2095,7 @@ function renderResults(){
   if(r.cam){if(r.pil)rows.push('<div class="stat seat">Camera op · '+Math.round(r.cam.score)+'</div>');
     rows.push(stat('Framing',Math.round(r.cam.framing)+'%'),stat('On the mark',Math.round(r.cam.on)+'%'),stat('Smoothness',Math.round(r.cam.smooth)+'%'),stat('Subject lost',r.cam.lost));}
   if(r.pil){if(r.cam)rows.push('<div class="stat seat">Pilot · '+Math.round(r.pil.score)+'</div>');
-    rows.push(stat('Line',Math.round(r.pil.line)+'%'),stat('On the mark',Math.round(r.pil.on)+'%'),stat('Smoothness',Math.round(r.pil.smooth)+'%'),stat('Too close',r.pil.close));}
+    rows.push(stat('Line',Math.round(r.pil.line)+'%'),stat('On the mark',Math.round(r.pil.on)+'%'),stat('Smoothness',Math.round(r.pil.smooth)+'%'),stat('Too close',r.pil.close));if(r.pil.nose!=null)rows.push(stat('Nose',Math.round(r.pil.nose)+'%'));}
   $('#rRows').innerHTML=rows.join('');
   const cv=$('#rTrack'),g=cv.getContext('2d'),n=Math.max(1,SC.track.length),lanes=(r.cam?1:0)+(r.pil?1:0),lh=(cv.height-4*(lanes-1))/lanes;
   g.clearRect(0,0,cv.width,cv.height);const col=['#20282b','#62d08b','#f0b13c','#57605f','#ff5b4b'];
@@ -1786,7 +2147,9 @@ function importShots(code){
 
 /* ---------- Locations: real-terrain maps ---------- */
 // Map files ("map packs") hold a height grid, the car route in local metres, and an aerial photo.
-const BUILTIN_MAPS=[{id:'bigsky',name:'Big Sky',file:'maps/big-sky.json',blurb:'Lone Mountain Trail climbing to Mountain Village, with Lone Mountain above. Montana.'}];
+const BUILTIN_MAPS=[{id:'bigsky',name:'Big Sky',file:'maps/big-sky.json',blurb:'Lone Mountain Trail climbing to Mountain Village, with Lone Mountain above. Montana.'},
+  {id:'lavalake',name:'Gallatin Canyon: Lava Lake',file:'maps/lava-lake.json',blurb:'US-191 under Gallatin Tower, Skyline Arête and the Sparerib area, with the Gallatin River. 2 m lidar terrain around the crags.'},
+  {id:'bozeman',name:'Downtown Bozeman',file:'maps/bozeman.json',blurb:'Main Street through downtown, with OpenStreetMap buildings and lidar-measured heights. Buildings collide.'}];
 const MAP_CREDITS='Elevation: USGS 3DEP. Aerial imagery: USGS National Map. Roads: US Census TIGER/Line.';
 const SITE_URL='https://elliotharrison111-ai.github.io/dual-op-trainer/',SITE_NAME=SITE_URL.replace(/^https:\/\/|\/$/g,'');
 const inViewer=(()=>{try{return window.top!==window.self;}catch(e){return true;}})();
@@ -1814,7 +2177,7 @@ async function useLocation(id){
     await buildWorld(pack);
     store.set('map',id);world.mini=pack&&pack.imagery?await miniPhoto(pack.imagery):null;
     car.v=15;resetDroneBehindCar();if(S.mode!=='home')goHome();else renderHome();
-    toast((pack?pack.name:'Practice valley')+' loaded.');
+    toast(pack?pack.name+' loaded. Rehearsal only: verify terrain, roads, buildings and airspace on site before flying it.':'Practice valley loaded.',pack?7000:4200);
   }catch(e){toast(e.message||'That map could not be loaded.');}
   mapBusy=false;renderLocations();
 }
@@ -1875,7 +2238,7 @@ async function fetchDEM(P,sizeX,sizeZ,nx,nz){
 }
 async function fetchImagery(P,sizeX,sizeZ,onProg){
   const maxTex=Math.min(4096,renderer.capabilities.maxTextureSize),span=Math.max(sizeX,sizeZ);
-  const res=z=>156543.03392*P.k/2**z;let z=clamp(Math.floor(Math.log2(156543.03392*P.k/(span/maxTex*.75))),10,17);
+  const res=z=>156543.03392*P.k/2**z;let z=clamp(Math.floor(Math.log2(156543.03392*P.k/(span/maxTex*.75))),10,16);
   const outRes=Math.max(span/maxTex,res(z)),W=Math.ceil(sizeX/outRes),H=Math.ceil(sizeZ/outRes);
   const xmin=P.X0-sizeX/2/P.k,xmax=P.X0+sizeX/2/P.k,ymin=P.Y0-sizeZ/2/P.k,ymax=P.Y0+sizeZ/2/P.k,T=2*Math.PI*MR/2**z,O=Math.PI*MR;
   const tx0=Math.floor((xmin+O)/T),tx1=Math.floor((xmax+O)/T),ty0=Math.floor((O-ymax)/T),ty1=Math.floor((O-ymin)/T);
@@ -1954,6 +2317,56 @@ function mmArea(){
   const w=parseWhere($('#mmWhere').value);if(!w)throw new Error('Enter the centre as "lat, lon", for example 45.2815, -111.392.');
   const sx=clamp(+$('#mmW').value||4,1,14)*1000,sz=clamp(+$('#mmH').value||4,1,14)*1000;return{...w,sx,sz};
 }
+// Elevation for any local rectangle, sampled on grid points (pixel centres on the corners). The USGS service uses lidar-derived
+// data only when pixels are 10 Web Mercator units or smaller (about 7 m on the ground at 45°N); coarser requests get the 10 m product.
+async function fetchDEMRect(P,x0,z0,x1,z1,nx,nz){
+  const cx=(x1-x0)/(nx-1),cz=(z1-z0)/(nz-1),b=[P.X0+(x0-cx/2)/P.k,P.Y0-(z1+cz/2)/P.k,P.X0+(x1+cx/2)/P.k,P.Y0-(z0-cz/2)/P.k];
+  const url='https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bbox='+b.map(v=>v.toFixed(2)).join(',')+
+    '&bboxSR=3857&imageSR=3857&size='+nx+','+nz+'&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&compression=None&f=image';
+  const r=await fetch(url);if(!r.ok)throw new Error('The USGS elevation service answered '+r.status+' for the detail patch.');
+  const t=readTiffF32(await r.arrayBuffer());if(t.W!==nx||t.H!==nz)throw new Error('The detail elevation came back the wrong size.');
+  let sum=0,cnt=0;for(const v of t.data)if(v>-500&&v<9000){sum+=v;cnt++;}const mean=cnt?sum/cnt:0;for(let i=0;i<t.data.length;i++)if(!(t.data[i]>-500&&t.data[i]<9000))t.data[i]=mean;
+  return t.data;
+}
+async function fetchImageryRect(P,x0,z0,x1,z1,targetRes,maxPx,onProg){
+  const w=x1-x0,h=z1-z0,res=z=>156543.03392*P.k/2**z;let z=clamp(Math.round(Math.log2(156543.03392*P.k/targetRes)),10,16);   // USGSImageryOnly serves tiles up to zoom 16 (about 1.7 m/px at 45°N), checked 30 Oct 2026
+  const outRes=Math.max(Math.max(w,h)/maxPx,res(z)),W=Math.ceil(w/outRes),H=Math.ceil(h/outRes);
+  const xmin=P.X0+x0/P.k,xmax=P.X0+x1/P.k,ymin=P.Y0-z1/P.k,ymax=P.Y0-z0/P.k,T=2*Math.PI*MR/2**z,O=Math.PI*MR;
+  const tx0=Math.floor((xmin+O)/T),tx1=Math.floor((xmax+O)/T),ty0=Math.floor((O-ymax)/T),ty1=Math.floor((O-ymin)/T);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');g.fillStyle='#6b7058';g.fillRect(0,0,W,H);
+  const jobs=[];for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++)jobs.push([tx,ty]);let done=0,fail=0;
+  const one=([tx,ty])=>new Promise(res2=>{const im=new Image();im.crossOrigin='anonymous';
+    im.onload=()=>{const dx=(tx*T-O-xmin)/(xmax-xmin)*W,dy=(ymax-(O-ty*T))/(ymax-ymin)*H,dw=T/(xmax-xmin)*W,dh=T/(ymax-ymin)*H;g.drawImage(im,dx,dy,dw+.5,dh+.5);done++;onProg&&onProg(done,jobs.length);res2();};
+    im.onerror=()=>{fail++;done++;onProg&&onProg(done,jobs.length);res2();};
+    im.src='https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/'+z+'/'+ty+'/'+tx;});
+  let i=0;await Promise.all(Array.from({length:8},async()=>{while(i<jobs.length)await one(jobs[i++]);}));
+  if(fail>jobs.length*.3)throw new Error('Most detail photo tiles failed to load.');return cv;
+}
+// Areal water (rivers drawn as areas, lakes) from Census TIGERweb hydrography, as rings in local metres
+async function fetchWater(P,sizeX,sizeZ){
+  const sw=P.toLatLon(-sizeX/2,sizeZ/2),ne=P.toLatLon(sizeX/2,-sizeZ/2);
+  const u='https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Hydro/MapServer/1/query?where=1%3D1&geometry='+[sw[1],sw[0],ne[1],ne[0]].map(v=>v.toFixed(5)).join(',')+
+    '&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=NAME,MTFCC&returnGeometry=true&outSR=4326&f=json';
+  const r=await fetch(u);if(!r.ok)throw new Error('Census hydrography answered '+r.status+'.');const d=await r.json();
+  return(d.features||[]).map(f=>({name:f.attributes.NAME||'',mtfcc:f.attributes.MTFCC,rings:(f.geometry.rings||[]).map(ring=>ring.map(c=>{const q=P.toLocal(c[1],c[0]);return[Math.round(q[0]*10)/10,Math.round(q[1]*10)/10];}))}));
+}
+// OpenStreetMap building footprints. Heights: height tag, else levels x 4.1 m, else a default by type; every building says where its height came from.
+const OSM_LEVEL_M=4.1;   // m per storey for downtown buildings [ESTIMATED]
+const OSM_DEFAULT_H={house:7,detached:7,garage:3.5,shed:3,commercial:9,retail:8,office:12,apartments:12,hotel:15,church:12,school:9,industrial:8,warehouse:8,yes:7};   // m [ESTIMATED]
+function parseLen(v){if(v==null)return NaN;const m=String(v).trim().match(/^([\d.]+)\s*(m|ft|')?/i);if(!m)return NaN;const n=+m[1];return/ft|'/i.test(m[2]||'')?n*.3048:n;}
+async function fetchBuildings(P,sizeX,sizeZ){
+  const sw=P.toLatLon(-sizeX/2,sizeZ/2),ne=P.toLatLon(sizeX/2,-sizeZ/2),bb=[sw[0],sw[1],ne[0],ne[1]].map(v=>v.toFixed(5)).join(',');
+  const q='[out:json][timeout:90];(way["building"]('+bb+'););out tags geom;';let d=null;
+  for(const ep of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){try{const r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});if(r.ok){d=await r.json();break;}}catch(e){}}
+  if(!d)throw new Error('OpenStreetMap (Overpass) did not answer. Try again in a minute.');
+  const out=[];for(const w of d.elements||[]){if(!w.geometry||w.geometry.length<4)continue;const t=w.tags||{};
+    let p=w.geometry.map(g=>{const q2=P.toLocal(g.lat,g.lon);return[Math.round(q2[0]*10)/10,Math.round(q2[1]*10)/10];});if(p.length>1&&p[0][0]===p[p.length-1][0]&&p[0][1]===p[p.length-1][1])p.pop();
+    let h=parseLen(t.height),src='osm-height';if(!(h>0)){const lv=parseFloat(t['building:levels']);if(lv>0){h=lv*OSM_LEVEL_M+(parseFloat(t['roof:levels'])>0?parseFloat(t['roof:levels'])*2:0);src='osm-levels';}}
+    if(!(h>0)){h=OSM_DEFAULT_H[t.building]||OSM_DEFAULT_H.yes;src='default-'+(OSM_DEFAULT_H[t.building]?t.building:'yes');}
+    out.push({id:w.id,p,h:Math.round(h*10)/10,roof:t['roof:shape']||'flat',src,name:t.name||''});}
+  return out;
+}
+
 async function mmFetch(){
   if(mm.busy)return;let a;try{a=mmArea();}catch(e){mmStatus(e.message);return;}
   mm.busy=true;$('#mmFetch').disabled=true;$('#mmBuild').disabled=true;
@@ -1965,6 +2378,18 @@ async function mmFetch(){
     mm.img=await fetchImagery(mm.P,a.sx,a.sz,(d,n)=>mmStatus('Loading aerial photo tiles: '+d+' of '+n+'…'));
     if(mm.src==='name'){mmStatus('Looking up "'+$('#mmRoad').value+'" in Census road data…');mm.route=cleanRoute(await fetchRoad(mm.P,a.sx,a.sz,$('#mmRoad').value),a.sx/2,a.sz/2);}
     else if(mm.src==='file'&&mm.fileRoute)mm.route=cleanRoute(mm.fileRoute.map(p=>mm.P.toLocal(p[0],p[1])),a.sx/2,a.sz/2);
+    mm.detail=null;mm.water=null;mm.buildings=null;
+    if($('#mmDetailOn').checked){const w=parseWhere($('#mmDetailWhere').value)||{lat:a.lat,lon:a.lon},c=mm.P.toLocal(w.lat,w.lon),res=+$('#mmDetailRes').value,
+        hw=clamp(+$('#mmDetailW').value||1,.2,3)*500,hh=clamp(+$('#mmDetailH').value||1,.2,3)*500,cx=a.sx/(mm.nx-1),cz=a.sz/(mm.nz-1),gx0=-a.sx/2,gz0=-a.sz/2;
+      // snap the patch to coarse grid lines so the seam matches exactly
+      const ix0=clamp(Math.round((c[0]-hw-gx0)/cx),1,mm.nx-2),ix1=clamp(Math.round((c[0]+hw-gx0)/cx),ix0+2,mm.nx-2),iz0=clamp(Math.round((c[1]-hh-gz0)/cz),1,mm.nz-2),iz1=clamp(Math.round((c[1]+hh-gz0)/cz),iz0+2,mm.nz-2);
+      const x0=gx0+ix0*cx,x1=gx0+ix1*cx,z0=gz0+iz0*cz,z1=gz0+iz1*cz,dnx=Math.round((x1-x0)/res)+1,dnz=Math.round((z1-z0)/res)+1;
+      if(dnx*dnz>1.6e6)throw new Error('The detail patch is too big ('+dnx+' × '+dnz+'). Make it smaller or coarser.');
+      mmStatus('Loading detail elevation ('+dnx+' × '+dnz+' at '+res+' m)…');const dem=await fetchDEMRect(mm.P,x0,z0,x1,z1,dnx,dnz);
+      const dimg=await fetchImageryRect(mm.P,x0,z0,x1,z1,Math.max(.5,res/2),4096,(d,n)=>mmStatus('Loading detail photo tiles: '+d+' of '+n+'…'));
+      mm.detail={x0,z0,sizeX:x1-x0,sizeZ:z1-z0,nx:dnx,nz:dnz,dem,img:dimg,res};}
+    if($('#mmWater').checked){mmStatus('Loading rivers and lakes…');mm.water=await fetchWater(mm.P,a.sx,a.sz);}
+    if($('#mmBldg').checked){mmStatus('Loading OpenStreetMap buildings…');mm.buildings=await fetchBuildings(mm.P,a.sx,a.sz);}
     drawMM();
     if(mm.route.length<2)mmStatus(mm.src==='draw'?'Terrain loaded. Click along the road on the photo to lay the car route, then Build map.':'Terrain loaded, but the route did not fall inside the area. Draw it on the photo or adjust the area.');
     else mmStatus('Ready: '+(routeLen(mm.route)/1000).toFixed(1)+' km route. Click the photo to extend it, or Build map.');
@@ -2003,8 +2428,13 @@ $('#mmBuild').onclick=async()=>{
   if(!mm.dem||mm.route.length<2)return;$('#mmBuild').disabled=true;mmStatus('Building the map…');
   let base=Infinity;for(const v of mm.dem)base=Math.min(base,v);base=Math.floor(base);
   const rel=new Float32Array(mm.dem.length);for(let i=0;i<rel.length;i++)rel[i]=mm.dem[i]-base;
-  const pack={type:'dualop-map',v:1,id:'m'+Date.now().toString(36),name:($('#mmName').value||'My map').trim().slice(0,40),lat:mm.lat,lon:mm.lon,sizeX:mm.sizeX,sizeZ:mm.sizeZ,nx:mm.nx,nz:mm.nz,base,
-    h:encodeHeights(rel),route:mm.route,closed:$('#mmClosed').checked,imagery:mm.img.toDataURL('image/jpeg',.82),credits:MAP_CREDITS,created:new Date().toISOString()};
+  const extra={},att=[{text:'Elevation and aerial imagery: U.S. Geological Survey (3DEP, National Map)',url:'https://www.usgs.gov/3d-elevation-program'},{text:'Roads: U.S. Census Bureau TIGER/Line',url:'https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html'}];let credits=MAP_CREDITS;
+  if(mm.detail){const D=mm.detail,dr=new Float32Array(D.dem.length);for(let i=0;i<dr.length;i++)dr[i]=D.dem[i]-base;
+    extra.detail={x0:D.x0,z0:D.z0,sizeX:D.sizeX,sizeZ:D.sizeZ,nx:D.nx,nz:D.nz,res:D.res,h:encodeHeights(dr),imagery:D.img.toDataURL('image/jpeg',.82)};credits+=' Detail terrain: USGS 3DEP 1 m lidar-derived DEM where available.';}
+  if(mm.water&&mm.water.length){extra.water=mm.water;credits+=' Water: US Census TIGER/Line hydrography.';att.push({text:'Water: U.S. Census Bureau TIGER/Line hydrography',url:'https://tigerweb.geo.census.gov/'});}
+  if(mm.buildings&&mm.buildings.length){extra.buildings=mm.buildings;credits+=' Buildings © OpenStreetMap contributors (ODbL).';att.push({text:'Buildings © OpenStreetMap contributors, ODbL 1.0',url:'https://www.openstreetmap.org/copyright'});}
+  const pack={type:'dualop-map',v:2,...extra,attribution:att,id:'m'+Date.now().toString(36),name:($('#mmName').value||'My map').trim().slice(0,40),lat:mm.lat,lon:mm.lon,sizeX:mm.sizeX,sizeZ:mm.sizeZ,nx:mm.nx,nz:mm.nz,base,
+    h:encodeHeights(rel),route:mm.route,closed:$('#mmClosed').checked,imagery:mm.img.toDataURL('image/jpeg',.82),credits,created:new Date().toISOString()};
   showOverlay('home');await saveUserMap(pack);await useLocation(pack.id);
   if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))try{await fetch('/maps/'+pack.id+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pack)});}catch(e){}
 };
@@ -2063,6 +2493,7 @@ function renderQuick(){
   if($('#liveWind')._h!==w){$('#liveWind').innerHTML=w;$('#liveWind')._h=w;}
 }
 function renderSettings(){
+  {const c=gimCaps();$('#gpPanMax').max=c.pan;$('#gpTiltMax').max=c.tilt;}
   const s=settings,gp=gimbalProf(),fp=flightProf(),spd=v=>imperial()?Math.round(v*2.23694)+' mph':Math.round(v*3.6)+' km/h';
   $('#setGimbalMode').value=s.gimbalMode;$('#setCamLayout').value=s.camLayout;$('#setInvert').checked=s.invertTilt;
   $('#gpTabs').innerHTML=segHTML(gpItems(),s.gimbalProfile,'gp');$('#fmTabs').innerHTML=segHTML(fmItems(),s.flightMode,'fm');
@@ -2071,15 +2502,23 @@ function renderSettings(){
     $('#'+id).value=gp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(gp[k]);}
   for(const [id,k,f] of [['fpVmax','vmax',spd],['fpYaw','yaw',v=>v+'°/s'],['fpUp','up',v=>(+v).toFixed(1)+' m/s'],['fpDown','down',v=>(+v).toFixed(1)+' m/s'],['fpAccel','accel',v=>(+v).toFixed(1)],['fpExpo','expo',v=>(+v).toFixed(2)],['fpRollExpo','rollExpo',v=>(+v).toFixed(2)]]){
     $('#'+id).value=fp[k];$('#v'+id[0].toUpperCase()+id.slice(1)).textContent=f(fp[k]);}
+  $('#setGimCtl').value=s.gimbalCtl||'rcplus';$('#setGimExt').checked=!!s.gimbalExt;$('#setGear').value=s.gear||'up';
+  $('#setPhys2').checked=!!s.physicsV2;$('#setChallenge').checked=!!s.challenge;$('#setAiImp').value=s.aiImperfect||'low';
   $('#wSpeed').value=s.wind.speed;$('#vWSpeed').textContent=s.wind.speed?spd(s.wind.speed)+' ('+(+s.wind.speed).toFixed(1)+' m/s)':'Calm';$('#wDir').value=s.wind.dir;$('#vWDir').textContent=compass(s.wind.dir)+' ('+s.wind.dir+'\u00b0)';
   $('#wGust').innerHTML=segHTML([{id:'off',label:'Off'},{id:'light',label:'Light'},{id:'strong',label:'Strong'}],s.wind.gust,'wg');
-  $('#setScreen').value=s.screen;$('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
+  $('#setFpvLens').value=s.fpvLens||'rect';$('#setScreen').value=s.screen;$('#setUnits').value=s.units;$('#setGuides').checked=s.guides;$('#setRing').checked=s.ring;$('#setDeadband').value=s.deadband;$('#vDead').textContent=(+s.deadband).toFixed(2);
   app.classList.toggle('noguides',!s.guides);app.classList.toggle('noring',!s.ring);renderQuick();
 }
 function bindSetting(id,key,parse){$(id).addEventListener('input',e=>{settings[key]=parse(e.target);saveSettings();renderSettings();});}
 $('#wSpeed').addEventListener('input',e=>{settings.wind.speed=+e.target.value;saveSettings();renderSettings();});
 $('#wDir').addEventListener('input',e=>{settings.wind.dir=+e.target.value;saveSettings();renderSettings();});
+bindSetting('#setPhys2','physicsV2',t=>t.checked);bindSetting('#setChallenge','challenge',t=>t.checked);bindSetting('#setAiImp','aiImperfect',t=>t.value);
+$('#setPhys2').addEventListener('input',()=>{v2s.prev=null;rPrev.px=null;v2s.acc=0;aiReset();settleFlight();renderHome();toast(phys2()?'Physics v2 on. Best scores are kept separately.':'Physics v1.');});
+bindSetting('#setFpvLens','fpvLens',t=>t.value);
 bindSetting('#setScreen','screen',t=>t.value);$('#setScreen').addEventListener('input',applyRoleView);
+bindSetting('#setGimCtl','gimbalCtl',t=>t.value);bindSetting('#setGimExt','gimbalExt',t=>t.checked);bindSetting('#setGear','gear',t=>t.value);
+$('#setGimCtl').addEventListener('input',()=>{const c=gimCaps();for(const g of settings.gimbalProfiles){g.panMax=Math.min(g.panMax,c.pan);g.tiltMax=Math.min(g.tiltMax,c.tilt);}saveSettings();renderSettings();});
+$('#setGimExt').addEventListener('input',layout);$('#setGear').addEventListener('input',layout);
 bindSetting('#setGimbalMode','gimbalMode',t=>t.value);bindSetting('#setCamLayout','camLayout',t=>t.value);bindSetting('#setInvert','invertTilt',t=>t.checked);
 bindSetting('#setUnits','units',t=>t.value);bindSetting('#setGuides','guides',t=>t.checked);bindSetting('#setRing','ring',t=>t.checked);bindSetting('#setDeadband','deadband',t=>+t.value);
 for(const [id,k] of [['gpPanMax','panMax'],['gpTiltMax','tiltMax'],['gpPanSmooth','panSmooth'],['gpTiltSmooth','tiltSmooth'],['gpPanExpo','panExpo'],['gpTiltExpo','tiltExpo']])
@@ -2088,7 +2527,7 @@ for(const [id,k] of [['fpVmax','vmax'],['fpYaw','yaw'],['fpUp','up'],['fpDown','
   $('#'+id).addEventListener('input',e=>{flightProf()[k]=+e.target.value;saveSettings();renderSettings();});
 $('#gpName').addEventListener('input',e=>{gimbalProf().name=e.target.value.slice(0,24)||'Profile '+(settings.gimbalProfile+1);saveSettings();renderSettings();});
 function setGimbalProfile(i,announce){settings.gimbalProfile=((i%3)+3)%3;saveSettings();renderSettings();if(announce)toast('Gimbal profile '+(settings.gimbalProfile+1)+': '+gimbalProf().name);}
-function setFlightMode(m,announce){settings.flightMode=m;saveSettings();renderSettings();if(announce)toast('Flight mode '+m+': '+FLIGHT_MODES.find(x=>x.id===m).label.split(' - ')[1]);}
+function setFlightMode(m,announce){if(m!==settings.flightMode)cruise.on=false;settings.flightMode=m;saveSettings();renderSettings();if(announce)toast('Flight mode '+m+': '+FLIGHT_MODES.find(x=>x.id===m).label.split(' - ')[1]);}
 function setWind(v,announce){settings.wind.speed=v;saveSettings();renderSettings();if(announce)toast(v?'Wind '+fmtSpd(v)+' from '+compass(settings.wind.dir)+(settings.wind.gust!=='off'?', '+settings.wind.gust+' gusts':''):'Wind calm');}
 document.addEventListener('click',e=>{const w=e.target.closest('[data-wp]'),wg=e.target.closest('[data-wg]');
   if(w)setWind(+w.dataset.wp,true);if(wg){settings.wind.gust=wg.dataset.wg;saveSettings();renderSettings();}});
@@ -2165,6 +2604,7 @@ window.addEventListener('keydown',e=>{
     else if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();else if(S.mode==='brief'||S.mode==='results')goHome();}
   else if(e.code==='KeyV'){S.swapPref=!S.swap;applyRoleView();}
   else if(e.code==='KeyT')togglePanel();
+  else if(e.code==='KeyZ'){if(seats().pilotHuman&&S.mode!=='home')cruiseToggle();}
   else if(e.code==='KeyC')setGimbalProfile(settings.gimbalProfile+1,true);
   else if(e.code==='KeyF'){const ids=FLIGHT_MODES.map(m=>m.id);setFlightMode(ids[(ids.indexOf(settings.flightMode)+1)%ids.length],true);}
   else if(e.code==='KeyG'){settings.guides=!settings.guides;saveSettings();renderSettings();}
@@ -2181,11 +2621,266 @@ window.addEventListener('gamepadconnected',()=>{pollInput(0);renderPadStatus();i
 window.addEventListener('gamepaddisconnected',()=>{pollInput(0);renderPadStatus();if(!$('#controls').hidden)renderControls();});
 setInterval(()=>{if(S.mode==='home')renderPadStatus();liveAxes();},250);
 
+/* ---------- Dev recorder (?dev) ---------- */
+// Logs every physics step and every drawn frame; Download CSV, or plot any three channels live.
+const QS=new URLSearchParams(location.search),DEV=QS.has('dev'),SELFTEST=QS.has('selftest');
+let stBusy=false,lastAiSt=null;
+const REC_COLS=['kind','t','wall_ms','dt','frame','steps','phys','mode','seat','raw_pitch','raw_roll','raw_thr','raw_yaw','raw_pan','raw_tilt',
+  'in_pitch','in_roll','in_thr','in_yaw','in_pan','in_tilt','sample_new','sample_age_ms','sh_pitch','sh_roll','sh_thr','sh_yaw','sh_pan','sh_tilt',
+  'tv_x','tv_z','tv_y','v_x','v_z','v_y','a_x','a_z','a_y','jerk_h','snap_h','jerk_v','lean_pitch','lean_roll','yaw_rate','yaw_acc',
+  'pan_rate','tilt_rate','pan_acc','tilt_acc','x9_err_deg','wind_x','wind_z'];
+const _dir=new THREE.Vector3();
+const devRec={on:false,rows:[],max:400000,frameN:0,raw:null,pv:null,smp:{n:-1,ts:-1,at:0,isNew:0},
+  start(){this.rows=[];this.pv=null;this.on=true;},
+  stop(){this.on=false;},
+  // After pollInput: keep the raw sticks and notice whether the pilot's controller delivered a new sample
+  poll(now){this.raw=snapInput();const d=seatDev.pilot,sm=this.smp;let n=-1;
+    if(d){if(d.kind==='dji'){const dv=dji.list.concat(djiu.list).find(x=>x.key===d.key);n=dv?dv.packets:-1;}else n=d.ts||0;}
+    sm.isNew=n!==sm.n?1:0;if(sm.isNew)sm.at=now;sm.n=n;},
+  step(dt){
+    if(this.rows.length>=this.max)return;
+    const st=seats(),pilotHuman=S.mode!=='home'&&st.pilotHuman,fp=pilotHuman?flightProf():settings.flightProfiles[S.aiMode||'N'],gp=gimbalProf(),db=settings.deadband;
+    const ip=pilotHuman?input.pil:(lastAiSt||{pitch:NaN,roll:NaN,thr:NaN,yaw:NaN}),r=this.raw||snapInput(),pv=this.pv;
+    const ax=drone.acc.x,az=drone.acc.z,ay=drone.acc.y;
+    let jx=0,jz=0,jv=0,sn=0,pr=0,tr=0,pa=0,ta=0,ya=0;
+    if(pv&&dt>0){jx=(ax-pv.ax)/dt;jz=(az-pv.az)/dt;jv=(ay-pv.ay)/dt;sn=Math.hypot(jx-pv.jx,jz-pv.jz)/dt;
+      pr=wrapPi(gim.pan-pv.gp)/dt/DEG;tr=(gim.tilt-pv.gt)/dt/DEG;pa=(pr-pv.pr)/dt;ta=(tr-pv.tr)/dt;ya=(drone.yawRate-pv.yr)/dt/DEG;}
+    camMain.getWorldDirection(_dir);const ct=Math.cos(gim.tilt),ideal=[-Math.sin(gim.pan)*ct,Math.sin(gim.tilt),-Math.cos(gim.pan)*ct];
+    const x9=Math.acos(clamp(_dir.x*ideal[0]+_dir.y*ideal[1]+_dir.z*ideal[2],-1,1))/DEG;
+    const now=performance.now();
+    this.rows.push(['step',S.t,now,dt,this.frameN,'',phys2()?2:1,pilotHuman?settings.flightMode:'AI '+(S.aiMode||'N'),S.role,
+      r.pil.pitch,r.pil.roll,r.pil.thr,r.pil.yaw,r.cam.pan,r.cam.tilt,ip.pitch,ip.roll,ip.thr,ip.yaw,input.cam.pan,input.cam.tilt,
+      this.smp.isNew,now-this.smp.at,expo(ip.pitch,fp.expo,db),expo(ip.roll,fp.rollExpo,db),expo(ip.thr,fp.expo,db),expo(ip.yaw,fp.expo,db),
+      expo(input.cam.pan,gp.panExpo,db),expo(input.cam.tilt,gp.tiltExpo,db),
+      pilotHuman?drone.dbg.tvx:Vp.x,pilotHuman?drone.dbg.tvz:Vp.z,pilotHuman?drone.dbg.tvy:Vp.y,drone.vel.x,drone.vel.z,drone.vel.y,ax,az,ay,
+      Math.hypot(jx,jz),sn,jv,drone.visPitch/DEG,drone.visRoll/DEG,drone.yawRate/DEG,ya,pr,tr,pa,ta,x9,wind.x,wind.z]);
+    this.smp.isNew=0;
+    this.pv={ax,az,ay,jx,jz,gp:gim.pan,gt:gim.tilt,pr,tr,yr:drone.yawRate};
+  },
+  frame(dt,steps,now){this.frameN++;if(!this.on||this.rows.length>=this.max)return;
+    const row=new Array(REC_COLS.length).fill('');row[0]='frame';row[1]=S.t;row[2]=now;row[3]=dt;row[4]=this.frameN;row[5]=steps;row[6]=phys2()?2:1;this.rows.push(row);},
+  csv(){const out=[REC_COLS.join(',')];for(const r of this.rows)out.push(r.map(v=>typeof v==='number'?(Number.isFinite(v)?+v.toFixed(6):''):v).join(','));return out.join('\n');}
+};
+function devDownload(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);}
+function devUI(){
+  const box=document.createElement('div');box.id='devBar';
+  box.style.cssText='position:absolute;left:10px;top:calc(var(--top-h) + 8px);z-index:30;display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:rgba(12,14,15,.9);border:1px solid var(--line-2);border-radius:6px;padding:6px 8px;font:500 11px var(--font-data);max-width:calc(100% - 20px)';
+  const opts=REC_COLS.slice(9).map(c=>'<option>'+c+'</option>').join('');
+  box.innerHTML='<b style="color:var(--tally)">DEV</b><button class="btn small" id="devRec">Record</button><button class="btn small" id="devCsv">CSV</button><button class="btn small" id="devPlot">Plot</button>'+
+    '<select id="devC1">'+opts+'</select><select id="devC2">'+opts+'</select><select id="devC3">'+opts+'</select><span id="devN" class="muted"></span>'+
+    '<canvas id="devCv" width="720" height="260" hidden style="flex-basis:100%;width:100%;max-width:720px;background:#0b0e10;border:1px solid var(--line);border-radius:4px"></canvas>';
+  app.appendChild(box);
+  $('#devC1').value='in_roll';$('#devC2').value='lean_roll';$('#devC3').value='jerk_h';
+  $('#devRec').onclick=()=>{if(devRec.on){devRec.stop();$('#devRec').textContent='Record';}else{devRec.start();$('#devRec').textContent='Stop';}};
+  $('#devCsv').onclick=()=>{if(!devRec.rows.length){toast('Nothing recorded yet.');return;}devDownload('dualop-rec-'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv',devRec.csv(),'text/csv');};
+  $('#devPlot').onclick=()=>{$('#devCv').hidden=!$('#devCv').hidden;};
+  setInterval(()=>{$('#devN').textContent=devRec.rows.length+' rows'+(devRec.on?' · recording':'');if(!$('#devCv').hidden)devPlot();},250);
+}
+function devPlot(){
+  const cv=$('#devCv'),g=cv.getContext('2d'),W=cv.width,H=cv.height;g.fillStyle='#0b0e10';g.fillRect(0,0,W,H);
+  const steps=devRec.rows.filter(r=>r[0]==='step');if(steps.length<2)return;const tEnd=steps[steps.length-1][1],t0=tEnd-20,cols=['#e5402c','#62d08b','#7fb6ff'];
+  ['devC1','devC2','devC3'].forEach((id,ci)=>{const c=REC_COLS.indexOf($('#'+id).value);let lo=Infinity,hi=-Infinity;const pts=[];
+    for(const r of steps){if(r[1]<t0)continue;const v=r[c];if(!Number.isFinite(v))continue;pts.push([r[1],v]);lo=Math.min(lo,v);hi=Math.max(hi,v);}
+    if(pts.length<2)return;if(hi-lo<1e-9){hi+=1;lo-=1;}
+    g.strokeStyle=cols[ci];g.lineWidth=1.2;g.beginPath();pts.forEach(([t,v],i)=>{const x=(t-t0)/20*W,y=H-8-(v-lo)/(hi-lo)*(H-24);i?g.lineTo(x,y):g.moveTo(x,y);});g.stroke();
+    g.fillStyle=cols[ci];g.font='11px IBM Plex Mono, monospace';g.fillText($('#'+id).value+'  '+lo.toFixed(2)+' … '+hi.toFixed(2),8,14+ci*13);});
+}
+
+/* ---------- Self-tests (?selftest) ---------- */
+// Deterministic: seeded gusts, scripted sticks, fixed frame rates. Results go to the on-page table, window.__selftest and #stOut (JSON).
+const stZero=()=>({thr:0,yaw:0,pitch:0,roll:0,fpvTilt:0});
+function stReset(o){
+  settings.physicsV2=!!o.v2;settings.flightMode=o.mode||'N';settings.gimbalMode='free';settings.wind={speed:o.wind||0,dir:o.dir==null?270:o.dir,gust:o.gust||'off'};
+  windRng=rng(o.seed||7);wind.gx=wind.gz=0;S.mode='sandbox';S.role='pilot';
+  const x=o.x||0,z=o.z||0;drone.pos.set(x,terrainH(x,z)+(o.agl||60),z);drone.vel.set(0,0,0);drone.acc.set(0,0,0);
+  drone.yaw=o.yaw||0;drone.yawRate=0;drone.yawAcc=0;drone.visPitch=drone.visRoll=0;drone.hold=null;windStep(0);settleFlight();
+}
+function stStep(h,inp){windStep(h);if(phys2()){pilotStep2(h,inp);droneVisual2();}else{pilotStep(h,inp);droneVisual(h);}}
+// Mirrors the live loop: sticks sampled at frame times; v1 steps once per frame, v2 runs fixed sub-steps with the same input reconstruction
+// o.cont: evaluate the input at every physics step (isolates the physics from frame sampling)
+function stRun(o,dur,inputAt,onStep){
+  const fdt=o.fdt||1/60,h=1/PHYS2.hz,kf=1-Math.exp(-h/PHYS2.inputTau),nf=Math.round(dur/fdt);let acc=0,simT=0,prev=inputAt(0);const filt=Object.assign({},prev);
+  for(let fi=1;fi<=nf;fi++){const t=fi*fdt,now=inputAt(t);
+    if(phys2()){acc+=fdt;let n=0;while(acc>=h-1e-9){acc-=h;n++;}
+      for(let k=1;k<=n;k++){simT+=h;let use;if(o.cont)use=inputAt(simT);else{for(const f in now){const m=prev[f]+(now[f]-prev[f])*k/n;filt[f]+=(m-filt[f])*kf;}use=filt;}stStep(h,use);onStep&&onStep(h,simT);}prev=now;}
+    else{simT+=fdt;stStep(fdt,o.cont?inputAt(simT):now);onStep&&onStep(fdt,simT);}
+  }
+  return simT;
+}
+// Peak and percentile derivatives of horizontal acceleration, per physics step
+function stDeriv(){const m={pa:0,pj:0,ps:0,js:[],pl:0,pyr:0,pya:0,pvz:0,pva:0,pvj:0,_a:null,_j:null,_yr:0,_va:0};
+  m.add=(h)=>{const ax=drone.acc.x,az=drone.acc.z;m.pa=Math.max(m.pa,Math.hypot(ax,az));m.pl=Math.max(m.pl,Math.hypot(drone.visPitch,drone.visRoll)/DEG);
+    m.pyr=Math.max(m.pyr,Math.abs(drone.yawRate)/DEG);m.pvz=Math.max(m.pvz,Math.abs(drone.vel.y));m.pva=Math.max(m.pva,Math.abs(drone.acc.y));
+    if(m._a){const jx=(ax-m._a.x)/h,jz=(az-m._a.z)/h,j=Math.hypot(jx,jz);m.pj=Math.max(m.pj,j);m.js.push(j);
+      if(m._j)m.ps=Math.max(m.ps,Math.hypot(jx-m._j.x,jz-m._j.z)/h);m._j={x:jx,z:jz};
+      m.pya=Math.max(m.pya,Math.abs(drone.yawRate-m._yr)/h/DEG);m.pvj=Math.max(m.pvj,Math.abs(drone.acc.y-m._va)/h);}
+    m._a={x:ax,z:az};m._yr=drone.yawRate;m._va=drone.acc.y;};
+  return m;}
+const pct=(arr,p)=>{if(!arr.length)return 0;const a=arr.slice().sort((x,y)=>x-y);return a[Math.min(a.length-1,Math.floor(p*(a.length-1)))];};
+const r2=v=>Math.round(v*100)/100,r1=v=>Math.round(v*10)/10;
+function stHover(o,secs){o.agl=o.agl||22;stReset(o);stRun(o,2,()=>stZero());const x0=drone.pos.x,z0=drone.pos.z;let maxOff=0,maxLean=0;
+  stRun(o,secs,()=>stZero(),()=>{maxOff=Math.max(maxOff,Math.hypot(drone.pos.x-x0,drone.pos.z-z0));maxLean=Math.max(maxLean,Math.hypot(drone.visPitch,drone.visRoll)/DEG);});
+  return{drift:r2(Math.hypot(drone.pos.x-x0,drone.pos.z-z0)),maxOff:r2(maxOff),lean:r1(Math.hypot(drone.visPitch,drone.visRoll)/DEG),maxLean:r1(maxLean),gs:r2(Math.hypot(drone.vel.x,drone.vel.z))};}
+
+// Robot operators for full-shot runs: a competent camera op (P control on framing error with a 0.1 s reaction delay) and a pilot that flies the mark through the AI stick controller
+const robo={buf:[]};
+function roboCam(dt){const f=S.shot.frame;aimAngles(f.tx,f.ty,_aim);const gp=gimbalProf(),db=settings.deadband;
+  const pr=wrapPi(_aim.pan-gim.pan)*2.5/DEG,tr=(_aim.tilt-gim.tilt)*2.5/DEG;
+  robo.buf.push({pan:invExpo(clamp(-pr/gp.panMax,-1,1),gp.panExpo,db),tilt:invExpo(clamp(tr/gp.tiltMax,-1,1),gp.tiltExpo,db)});
+  while(robo.buf.length>Math.round(.1/dt)+1)robo.buf.shift();const s=robo.buf[0];input.cam.pan=s.pan;input.cam.tilt=s.tilt;}
+// A robot pilot for A mode: lean toward the mark with a PD controller (there is no position hold to lean on)
+function roboAtti(){const fp=settings.flightProfiles.A,db=settings.deadband,lim=SPEC.tiltLim.A*DEG,y=drone.yaw;
+  const ax=1.2*(P.x-drone.pos.x)+2*(Vp.x-drone.vel.x),az=1.2*(P.z-drone.pos.z)+2*(Vp.z-drone.vel.z),fwd=-Math.sin(y)*ax-Math.cos(y)*az,rt=Math.cos(y)*ax-Math.sin(y)*az;
+  const vy=Vp.y+1.2*(P.y-drone.pos.y),up=Math.min(fp.up,SPEC.vUp),dn=Math.min(fp.down,SPEC.vDown);
+  return{pitch:invExpo(clamp(Math.atan(fwd/GRAV)/lim,-1,1),fp.expo,db),roll:invExpo(clamp(Math.atan(rt/GRAV)/lim,-1,1),fp.rollExpo,db),thr:invExpo(clamp(vy>=0?vy/up:vy/dn,-1,1),fp.expo,db),yaw:0,fpvTilt:0};}
+function stShot(id,o){
+  const sh=BUILTIN.find(s=>s.id===id);settings.physicsV2=!!o.v2;settings.gimbalMode='free';settings.gimbalProfile=2;
+  settings.wind={speed:o.wind||0,dir:270,gust:o.gust||'off'};windRng=rng(o.seed||11);wind.gx=wind.gz=0;robo.buf.length=0;
+  S.role=o.seat==='pilot'?'pilot':'camera';prepareRun(sh);if(o.seat==='pilot'&&!(sh.drill&&sh.mode==='A'))settings.flightMode=S.aiMode;
+  S.mode='run';S.t=0;SC=newScore();v2s.prev=null;v2s.acc=0;for(const k in input.pil)input.pil[k]=0;input.cam.pan=input.cam.tilt=0;
+  const fdt=o.fdt||1/60,frameAcc=[],dev=[],speeds=[];let maxSpd=0,overBound=0,frames=0;const tb=GRAV*Math.tan(SPEC.tiltLim[S.aiMode||'N']*DEG);
+  while(S.mode==='run'&&S.t<sh.dur+1){
+    if(o.seat==='pilot'){Object.assign(input.pil,settings.flightMode==='A'?roboAtti():aiSticks(S.aiMode));}else roboCam(fdt);
+    if(phys2())advanceWorld2(fdt,h=>{if(S.mode==='run')stepWorld(h);});else stepWorld(fdt);
+    frames++;frameAcc.push([drone.acc.x,drone.acc.z]);const hs=Math.hypot(drone.vel.x,drone.vel.z);maxSpd=Math.max(maxSpd,hs);
+    if(Math.hypot(drone.acc.x,drone.acc.z)>tb+.05)overBound++;if(S.t>1)dev.push(drone.pos.distanceTo(P));}
+  // Jerk and snap resampled at the frame rate so v1 (frame-stepped) and v2 (240 Hz) compare like for like
+  const js=[],ss=[];for(let i=1;i<frameAcc.length;i++){const jx=(frameAcc[i][0]-frameAcc[i-1][0])/fdt,jz=(frameAcc[i][1]-frameAcc[i-1][1])/fdt;js.push([jx,jz]);}
+  for(let i=1;i<js.length;i++)ss.push(Math.hypot(js[i][0]-js[i-1][0],js[i][1]-js[i-1][1])/fdt);
+  const jm=js.map(j=>Math.hypot(j[0],j[1])),res=S.result||computeResults();S.mode='home';showOverlay(null);
+  return{shot:id,seat:o.seat,v:o.v2?2:1,mode:o.seat==='pilot'?settings.flightMode:S.aiMode,completed:!S.crash&&S.t>=sh.dur-.05,crash:S.crash||'',score:res.score,grade:res.grade,
+    devMean:r2(dev.reduce((a,b)=>a+b,0)/Math.max(1,dev.length)),devMax:r2(Math.max(0,...dev)),maxSpeed:r1(maxSpd),pctOverTiltBound:r1(overBound/frames*100),
+    jerkP50:r1(pct(jm,.5)),jerkP95:r1(pct(jm,.95)),jerkMax:r1(Math.max(0,...jm)),snapP50:r1(pct(ss,.5)),snapP95:r1(pct(ss,.95)),snapMax:r1(Math.max(0,...ss)),
+    jerkHist:hist(jm,[0,1,2,5,10,20,50,100,1e9]),snapHist:hist(ss,[0,10,20,50,100,200,500,1000,1e9])};
+}
+function hist(a,edges){const c=new Array(edges.length-1).fill(0);for(const v of a){for(let i=0;i<c.length;i++)if(v>=edges[i]&&v<edges[i+1]){c[i]++;break;}}return{edges,counts:c};}
+
+async function runSelfTests(){
+  stBusy=true;const keep=clone(settings),keepRole=S.role,R={started:new Date().toISOString(),ua:navigator.userAgent,tests:{}},T=R.tests;
+  const box=document.createElement('section');box.className='overlay dim';box.id='stBox';box.style.zIndex='40';
+  box.innerHTML='<div class="card wide"><span class="kicker">Self-test</span><h2 id="stHead">Running…</h2><div id="stTable" class="hint"></div><pre id="stOut" style="white-space:pre-wrap;max-height:40vh;overflow:auto;font:11px var(--font-data)"></pre></div>';
+  app.appendChild(box);const say=t=>{$('#stHead').textContent=t;};const tick=()=>new Promise(r=>setTimeout(r,0));
+  const V=[1,2],MODES=['T','N','S'];
+  // H6: acceleration caps against what each tilt limit allows
+  T.capsVsTilt=MODES.concat('A').map(m=>({mode:m,cap:FLIGHT_PROFILES[m].accel,tiltBound:r2(GRAV*Math.tan(SPEC.tiltLim[m]*DEG)),capReachable:FLIGHT_PROFILES[m].accel<=GRAV*Math.tan(SPEC.tiltLim[m]*DEG)}));
+  // H3 and step response: full forward from a hover, then release
+  say('Step responses');T.stepForward=[];
+  for(const v of V)for(const m of MODES){const o={v2:v===2,mode:m};stReset(o);const d=stDeriv(),vm=Math.min(FLIGHT_PROFILES[m].vmax,SPEC.vmax.S);let t90=null,peakV=0,t0=null,tSet=null;
+    stRun(o,10,t=>({...stZero(),pitch:1}),(h,t)=>{d.add(h);const v_=Math.hypot(drone.vel.x,drone.vel.z);peakV=Math.max(peakV,v_);if(t90==null&&v_>=.9*vm)t90=t;if(Math.abs(v_-vm)>.02*vm)tSet=null;else if(tSet==null)tSet=t;});
+    const x0=drone.pos.x,z0=drone.pos.z;let tStop=null;stRun(o,10,()=>stZero(),(h,t)=>{if(tStop==null&&Math.hypot(drone.vel.x,drone.vel.z)<.1)tStop=t;});
+    T.stepForward.push({v,mode:m,vmax:vm,peakAccel:r2(d.pa),peakJerk:r1(d.pj),peakSnap:r1(d.ps),jerkP95:r1(pct(d.js,.95)),t90:t90==null?null:r2(t90),settle2pct:tSet==null?null:r2(tSet),
+      overshootPct:r1(Math.max(0,(peakV-vm)/vm*100)),maxLean:r1(d.pl),stopDist:r1(Math.hypot(drone.pos.x-x0,drone.pos.z-z0)),stopTime:tStop==null?null:r2(tStop)});await tick();}
+  // 10 Hz traces shaped like a DJI flight record, for validating tools/fit_*.py against known constants
+  T.traces={};const rec10=(o,segs,fields)=>{stReset(o);const rows=[];let tt=0,next=0;for(const sg of segs){stRun(o,sg.dur,()=>({...stZero(),...sg.st}),(h,t)=>{tt+=h;if(tt>=next-1e-9){next+=.1;rows.push(fields(tt,sg.st));}});}return rows;};
+  const fwd=(t,st)=>[r2(t),st.pitch||0,+Math.hypot(drone.vel.x,drone.vel.z).toFixed(3),+(-drone.visPitch/DEG).toFixed(2)];
+  for(const [k,v,m] of [['v1N',1,'N'],['v2N',2,'N'],['v2S',2,'S'],['v2T',2,'T']])T.traces[k]={cols:['t','pitchStick','speed','pitchDeg'],mode:m,v,tau:SPEC.tau[m],accel:FLIGHT_PROFILES[m].accel,vmax:FLIGHT_PROFILES[m].vmax,
+    rows:rec10({v2:v===2,mode:m},[{dur:6,st:{pitch:1}},{dur:6,st:{}}],fwd)};
+  T.traces.v2Nyaw={cols:['t','yawStick','yawRateDeg'],mode:'N',yawMax:FLIGHT_PROFILES.N.yaw,rows:rec10({v2:true,mode:'N'},[{dur:3,st:{yaw:-1}},{dur:3,st:{}}],(t,st)=>[r2(t),-(st.yaw||0),+(drone.yawRate/DEG).toFixed(2)])};
+  T.traces.v2Nclimb={cols:['t','thrStick','climb'],mode:'N',up:FLIGHT_PROFILES.N.up,rows:rec10({v2:true,mode:'N'},[{dur:4,st:{thr:1}},{dur:3,st:{}}],(t,st)=>[r2(t),st.thr||0,+drone.vel.y.toFixed(3)])};
+  T.traces.v2Sdrag={cols:['t','pitchStick','speed','pitchDeg'],mode:'S',dragK:SPEC.dragK,rhoRatio:1,rows:rec10({v2:true,mode:'S'},[.3,.5,.7,.85,1].map(p=>({dur:8,st:{pitch:p}})),fwd)};
+  // Small inputs: 30% roll from a hover (the onset that felt "touchy")
+  T.roll30=[];for(const v of V){const o={v2:v===2,mode:'N'};stReset(o);const d=stDeriv();let pk=0,tpk=0,pv=0;stRun(o,5,()=>({...stZero(),roll:.3}),(h,t)=>{d.add(h);const l=Math.abs(drone.visRoll)/DEG;if(l>pk){pk=l;tpk=t;}pv=Math.max(pv,Math.hypot(drone.vel.x,drone.vel.z));});
+    const vEnd=Math.hypot(drone.vel.x,drone.vel.z);T.roll30.push({v,peakLean:r1(pk),tPeak:r2(tpk),peakJerk:r1(d.pj),peakSnap:r1(d.ps),speedEnd:r2(vEnd),speedOvershootPct:r1((pv-vEnd)/Math.max(vEnd,1e-6)*100)});}
+  // H4: yaw and vertical onsets
+  say('Yaw and vertical');T.yawStep=[];T.vertStep=[];
+  for(const v of V)for(const m of MODES){let o={v2:v===2,mode:m};stReset(o);let d=stDeriv();stRun(o,3,()=>({...stZero(),yaw:1}),h=>d.add(h));
+    T.yawStep.push({v,mode:m,peakRate:r1(d.pyr),peakAngAccel:r1(d.pya)});
+    stReset(o);d=stDeriv();stRun(o,3,()=>({...stZero(),thr:1}),h=>d.add(h));T.vertStep.push({v,mode:m,peakClimb:r2(d.pvz),peakVertAccel:r2(d.pva),peakVertJerk:r1(d.pvj)});await tick();}
+  // H5: gimbal step per profile (same gimbal model in v1 and v2; v2 steps it at 240 Hz)
+  say('Gimbal');T.gimbalStep=[];
+  for(let i=0;i<3;i++){settings.gimbalProfile=i;const gp=gimbalProf();for(const v of V){settings.physicsV2=v===2;gim.pan=0;gim.tilt=0;gim.panRate=0;gim.tiltRate=0;
+    const h=v===2?1/PHYS2.hz:1/60;let pk=0,pa=0,prev=0,t90=null,t=0;for(let k=0;k<Math.round(2/h);k++){t+=h;gimbalStep(h,{pan:1,tilt:0},0);const r=Math.abs(gim.panRate)/DEG;pa=Math.max(pa,Math.abs(r-prev)/h);prev=r;pk=Math.max(pk,r);if(t90==null&&r>=.9*gp.panMax)t90=t;}
+    T.gimbalStep.push({profile:gp.name,v,panMax:gp.panMax,smooth:gp.panSmooth,tau:r2(.04+.9*gp.panSmooth),peakRate:r1(pk),peakAngAccel:r1(pa),t90:t90==null?null:r2(t90)});}}
+  await tick();
+  // H1: same stick programme at 30, 60 and 144 fps; v2 should agree across frame rates
+  say('Frame-rate independence');T.frameRate=[];
+  const prog=t=>({...stZero(),pitch:t<2-1e-9?1:0,roll:t>=2-1e-9&&t<4-1e-9?.5:0,yaw:t>=4-1e-9&&t<5-1e-9?.5:0});
+  const smooth=t=>({...stZero(),pitch:Math.sin(t*.9),roll:.5*Math.sin(t*1.7),yaw:.4*Math.sin(t*.6)});
+  for(const [name,fn,cont] of [['steps, sampled per frame',prog,false],['smooth sticks, sampled per frame',smooth,false],['smooth sticks, continuous (physics only)',smooth,true]])
+  for(const v of V){const ends=[];for(const f of [30,60,144]){const o={v2:v===2,mode:'N',fdt:1/f,cont};stReset(o);stRun(o,8,fn);ends.push({fps:f,x:drone.pos.x,z:drone.pos.z,yaw:drone.yaw/DEG});}
+    let spread=0;for(const a of ends)for(const b of ends)spread=Math.max(spread,Math.hypot(a.x-b.x,a.z-b.z));
+    let ys=0;for(const a of ends)for(const b of ends)ys=Math.max(ys,Math.abs(wrapPi((a.yaw-b.yaw)*DEG)/DEG));
+    T.frameRate.push({v,input:name,positionSpreadM:+spread.toFixed(4),yawSpreadDeg:+ys.toFixed(4),ends:ends.map(e=>({fps:e.fps,x:+e.x.toFixed(3),z:+e.z.toFixed(3)}))});}
+  {const o={v2:true,mode:'N',fdt:1/60};stReset(o);stRun(o,8,prog);const a=[drone.pos.x,drone.pos.z];stReset(o);stRun(o,8,prog);T.repeatable={identical:a[0]===drone.pos.x&&a[1]===drone.pos.z};}
+  await tick();
+  // H2: a 50 Hz DJI stick stream (sample and hold) read at 60 fps, against the ideal continuous stick
+  say('Input aliasing');T.aliasing=[];
+  const sine=t=>.6*Math.sin(TAU*.5*t),dji50=t=>.6*Math.sin(TAU*.5*Math.floor(t*50)/50);
+  {let rep=0,dbl=0,last=null,lastIdx=null;for(let f=1;f<=600;f++){const t=f/60,idx=Math.floor(t*50);if(lastIdx!=null){if(idx===lastIdx)rep++;else if(idx-lastIdx>1)dbl++;}lastIdx=idx;}T.aliasingFrames={framesSampled:600,repeatedSamples:rep,skippedSamples:dbl};}
+  for(const v of V)for(const [name,fn] of [['ideal',sine],['dji50Hz',dji50]]){const o={v2:v===2,mode:'N'};stReset(o);const d=stDeriv();stRun(o,10,t=>({...stZero(),roll:fn(t)}),h=>d.add(h));
+    const rms=Math.sqrt(d.js.reduce((a,b)=>a+b*b,0)/Math.max(1,d.js.length));T.aliasing.push({v,input:name,jerkRms:r2(rms),jerkP95:r2(pct(d.js,.95)),peakJerk:r2(d.pj),peakSnap:r1(d.ps)});}
+  // Keyboard: the virtual stick ramps at 4/s (kstep), not a binary step
+  T.keyboard=[];for(const v of V){const o={v2:v===2,mode:'N'};stReset(o);const d=stDeriv();stRun(o,4,t=>({...stZero(),pitch:Math.min(1,t*4)}),h=>d.add(h));T.keyboard.push({v,peakJerk:r1(d.pj),peakSnap:r1(d.ps)});}
+  await tick();
+  // H7: a recorded move (10 Hz, rounded to cm) played back through the Catmull-Rom used for custom shots
+  say('Custom-shot playback');{const pts=[];for(let i=0;i<=200;i++){const t=i/10,a=t*.35;pts.push([Math.round(60*Math.sin(a)*100)/100,Math.round((20+3*Math.sin(t*.7))*100)/100,Math.round(60*(1-Math.cos(a))*100)/100]);}
+    const exact=60*.35*.35;T.catmull=[];
+    for(const [name,sp] of [['catmull-rom (v1)',catmull],['b-spline (v2)',bspline]]){
+      const at=(t)=>{const n=pts.length-1,f=clamp(t*10,0,n),i=Math.min(Math.floor(f),n-1),a=f-i,p0=pts[Math.max(i-1,0)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(i+2,n)];return [0,1,2].map(k=>sp(p0[k],p1[k],p2[k],p3[k],a));};
+      const h=1/240,acc=[];for(let t=1;t<19;t+=h){const a=at(t-h),b=at(t),c=at(t+h);acc.push(Math.hypot((a[0]-2*b[0]+c[0])/h/h,(a[2]-2*b[2]+c[2])/h/h));}
+      const jumps=[];for(let i=24;i<acc.length;i+=24)jumps.push(Math.abs(acc[i]-acc[i-1]));const within=[];for(let i=1;i<acc.length;i++)if(i%24)within.push(Math.abs(acc[i]-acc[i-1]));
+      T.catmull.push({spline:name,trueAccel:r2(exact),playbackAccelP50:r2(pct(acc,.5)),playbackAccelP95:r2(pct(acc,.95)),playbackAccelMax:r2(Math.max(...acc)),accelJumpAtKnotsP50:r2(pct(jumps,.5)),accelJumpAtKnotsMax:r2(Math.max(...jumps)),accelChangeBetweenKnotsMax:r2(Math.max(...within))});}}
+  // Wind regressions (from the v1 release) and terminal speed
+  say('Wind');T.wind=[];
+  for(const v of V){
+    T.wind.push({v,test:'N 8 m/s hover',...stHover({v2:v===2,mode:'N',wind:8},10),expect:'drift about 0.2 m, lean about 5°'});
+    T.wind.push({v,test:'N 12 m/s strong gusts hover',...stHover({v2:v===2,mode:'N',wind:12,gust:'strong'},15),expect:'within about 0.6 m, lean up to about 31°'});
+    {const o={v2:v===2,mode:'A',wind:8,agl:22};stReset(o);stRun(o,2,()=>stZero());const x0=drone.pos.x;stRun(o,6,()=>stZero());T.wind.push({v,test:'ATTI 8 m/s drift in 6 s',driftM:r1(drone.pos.x-x0),gs:r2(Math.hypot(drone.vel.x,drone.vel.z)),expect:'about 18 m'});}
+    {const o={v2:v===2,mode:'S',wind:14,yaw:Math.PI/2,agl:22};stReset(o);stRun(o,10,()=>({...stZero(),pitch:1}));T.wind.push({v,test:'S into 14 m/s headwind',gs:r1(Math.hypot(drone.vel.x,drone.vel.z)),lean:r1(Math.hypot(drone.visPitch,drone.visRoll)/DEG),expect:'about 11.7 m/s at about 40°'});}
+    {const o={v2:v===2,mode:'S'};stReset(o);stRun(o,20,()=>({...stZero(),pitch:1}));T.wind.push({v,test:'S full stick, calm, 20 s',gs:r1(Math.hypot(drone.vel.x,drone.vel.z)),lean:r1(Math.abs(drone.visPitch)/DEG),expect:'26 m/s'});}
+    await tick();}
+  // Limits obeyed by v2 during an aggressive programme in every mode
+  T.limits=[];for(const m of ['T','N','S','A']){const o={v2:true,mode:m,wind:10,gust:'strong'};stReset(o);const d=stDeriv();
+    stRun(o,12,t=>({thr:Math.sin(t*1.3),yaw:Math.sign(Math.sin(t*.9)),pitch:Math.sign(Math.sin(t*.7)),roll:Math.sin(t*1.7),fpvTilt:0}),h=>d.add(h));
+    T.limits.push({mode:m,maxLean:r1(d.pl),tiltLimit:SPEC.tiltLim[m],maxYawRate:r1(d.pyr),yawLimit:FLIGHT_PROFILES[m].yaw,maxVert:r2(d.pvz),ok:d.pl<=SPEC.tiltLim[m]+.1&&d.pyr<=FLIGHT_PROFILES[m].yaw+.5&&d.pvz<=SPEC.vUp+.01});}
+  await tick();
+  // H9: does airframe motion leak into the X9 picture? Pilot throws the aircraft around with the gimbal sticks centred (Free)
+  say('X9 stabilisation');T.x9=[];
+  for(const v of V){const o={v2:v===2,mode:'S'};stReset(o);gim.pan=0;gim.tilt=-.2;gim.panRate=gim.tiltRate=0;resetRel();placeCameras();camMain.getWorldDirection(_dir);const d0=_dir.clone();let mx=0;
+    stRun(o,8,t=>({thr:0,yaw:Math.sign(Math.sin(t*2)),pitch:Math.sign(Math.sin(t*1.3)),roll:Math.sign(Math.sin(t*1.7)),fpvTilt:0}),(h)=>{const y0=drone.yaw;gimbalStep(h,{pan:0,tilt:0},0);panLimit();placeCameras();camMain.getWorldDirection(_dir);mx=Math.max(mx,_dir.angleTo(d0)/DEG);});
+    T.x9.push({v,mode:'Free',maxCameraDriftDeg:+mx.toFixed(5)});}
+  // H10: Follow mode turns the camera with the AI pilot's yaw
+  {settings.physicsV2=false;settings.gimbalMode='follow';S.role='camera';const sh=BUILTIN.find(s=>s.id==='orbit');prepareRun(sh);S.mode='run';S.t=0;const p0=gim.pan,y0=drone.yaw;let dp=0,dy=0,lp=gim.pan,ly=drone.yaw;
+    for(let i=0;i<600;i++){input.cam.pan=input.cam.tilt=0;const yy=drone.yaw;stepWorldCamHuman(1/60);dp+=wrapPi(gim.pan-lp);dy+=wrapPi(drone.yaw-ly);lp=gim.pan;ly=drone.yaw;}
+    T.followMode={defaultGimbalMode:DEFAULTS.gimbalMode,aircraftYawDeg:r1(dy/DEG),cameraPanDeg:r1(dp/DEG),note:'Follow adds the aircraft yaw to the pan; Free does not'};S.mode='home';settings.gimbalMode='free';}
+  await tick();
+  // Cruise Control: lock 60% forward in N, let go, add 30% right after re-centring, then stop with sticks centred
+  {const o={v2:true,mode:'N'};stReset(o);cruise.on=false;let st={...stZero(),pitch:.6};const live=()=>st;const eff=()=>{const e=Object.assign({},live());cruiseApply(e);return e;};
+    stRun(o,3,eff);cruiseToggle(live(),true);const locked=cruise.on;st={...stZero()};stRun(o,4,eff);const vLock=Math.hypot(drone.vel.x,drone.vel.z);
+    st={...stZero(),roll:.3};stRun(o,3,eff);const vAdd=Math.hypot(drone.vel.x,drone.vel.z);st={...stZero()};stRun(o,1,eff);cruiseToggle(live(),true);stRun(o,6,eff);
+    const fp=FLIGHT_PROFILES.N,want=expo(.6,fp.expo,settings.deadband)*fp.vmax;
+    T.cruise={engaged:locked,speedHeldAfterRelease:r2(vLock),expected:r2(want),speedWithAddedRoll:r2(vAdd),offAfterCentredPress:!cruise.on,speedAfterStop:r2(Math.hypot(drone.vel.x,drone.vel.z))};cruise.on=false;}
+  // X9 residual vibration in v2 (published +/-0.004 deg flying)
+  {const o={v2:true,mode:'S'};stReset(o);gim.pan=0;gim.tilt=-.2;gim.panRate=gim.tiltRate=0;resetRel();let mx=0;
+    stRun(o,6,()=>({...stZero(),pitch:1}),(h)=>{vibStep(h);gimbalStep(h,{pan:0,tilt:0},0);placeCameras();camMain.getWorldDirection(_dir);const ct=Math.cos(gim.tilt);
+      const id=new THREE.Vector3(-Math.sin(gim.pan)*ct,Math.sin(gim.tilt),-Math.cos(gim.pan)*ct);mx=Math.max(mx,_dir.angleTo(id)/DEG);});
+    T.x9vibration={v:2,maxErrorDeg:+mx.toFixed(5),published:'+/-0.004 deg flying'};}
+  // AI pilot imperfection: what each level does to the aircraft motion the camera op sees
+  T.aiImperfection=[];for(const lvl of ['off','low','high']){settings.aiImperfect=lvl;const r=stShot('side',{v2:true,seat:'camera'});T.aiImperfection.push({level:lvl,devMean:r.devMean,jerkP50:r.jerkP50,jerkP95:r.jerkP95,score:r.score});await tick();}
+  settings.aiImperfect=keep.aiImperfect||'low';
+  // H8 and full shots: every built-in shot, both seats, v1 and v2, calm air; plus gusts on the Side Track
+  say('Shots');T.shots=[];
+  for(const sh of BUILTIN)for(const seat of ['camera','pilot'])for(const v of V){T.shots.push(stShot(sh.id,{v2:v===2,seat}));say('Shots: '+sh.name+' · '+seat+' · v'+v);await tick();}
+  T.gusts=[];for(const v of V)for(const [w,g] of [[0,'off'],[12,'strong']])T.gusts.push({v,wind:w,gust:g,...(({devMean,devMax,score,grade,jerkP95})=>({devMean,devMax,score,grade,jerkP95}))(stShot('side',{v2:v===2,seat:'camera',wind:w,gust:g}))});
+  // Restore the live state
+  Object.assign(settings,keep);S.role=keepRole;windRng=Math.random;S.mode='home';goHome();stBusy=false;
+  R.finished=new Date().toISOString();window.__selftest=R;
+  $('#stOut').textContent=JSON.stringify(R);document.title='SELFTEST DONE';say('Self-test done');
+  if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname))fetch('/results/'+(QS.get('out')||'selftest-latest')+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(R)}).catch(()=>{});
+  $('#stTable').innerHTML='<p>'+Object.keys(T).length+' groups. Full JSON below (also window.__selftest).</p>';
+  return R;
+}
+// Camera-op seat step used by the Follow test: the AI flies, the "human" gimbal input is whatever input.cam holds
+function stepWorldCamHuman(dt){stepWorld(dt);}
+
 /* ---------- Boot ---------- */
 $('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);
 renderSettings();
 buildWorld(null);car.v=15;setLens('35');resetDroneBehindCar();
-loadUserMaps().then(()=>{const id=store.get('map','valley');if(id&&id!=='valley')useLocation(id);});
+loadUserMaps().then(()=>{const id=store.get('map','valley');if(id&&id!=='valley'&&!SELFTEST)useLocation(id);});
+if(DEV)devUI();
+if(DEV||SELFTEST)window.__dual={PHYS2,SPEC,FLIGHT_PROFILES,settings,AI_IMP,runSelfTests,stShot,stReset,stRun,stDeriv,stZero,drone,att,fish,camFPV,renderer,scene,render,viewFisheye,camMain,gim,S,placeCameras,setLens,get world(){return world},get detail(){return detail},get bldgs(){return bldgs},terrainH:(x,z)=>terrainH(x,z),useLocation};
+if(SELFTEST)setTimeout(runSelfTests,800);
 S.mode='home';renderHome();applyRoleView();
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
 if(/^https?:$/.test(location.protocol)&&/^(localhost|127\.0\.0\.1)$/.test(location.hostname))bridgeConnect(bridgeURL());
