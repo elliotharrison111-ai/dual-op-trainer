@@ -51,6 +51,25 @@ button,input,select,textarea{font:inherit;color:inherit}
 #app.noguides .g,#app.noguides .safe{display:none}
 #app.noring #ring{display:none}
 #app.fpvmain #frame .g,#app.fpvmain #frame .safe,#app.fpvmain #ring,#app.fpvmain #zone,#app.fpvmain #panGauge,#app.fpvmain #tiltGauge{display:none}
+#qOsd{display:none;position:absolute;inset:0}
+#app.fpvq #frame>*:not(#qOsd){display:none}
+#app.fpvq #qOsd{display:block}
+#app.fpvq #live .quick,#app.fpvq #liveRows,#app.fpvq #live .sticks{display:none}
+.qtl{left:10px;top:10px}.qtr{right:10px;top:10px}
+.qtl .arm{color:var(--warn)}.qtl .arm.on{color:var(--bad)}
+.qcross{position:absolute;left:50%;top:50%;width:26px;height:2px;margin:-1px 0 0 -13px;background:rgba(244,241,234,.6);box-shadow:var(--osd-shadow)}
+.qmsg{position:absolute;left:50%;top:30%;transform:translateX(-50%);font:600 15px/1.2 var(--font-display);letter-spacing:.06em;color:var(--osd);text-shadow:var(--osd-shadow);background:rgba(0,0,0,.45);padding:7px 12px;border-radius:3px;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+.warnc{color:var(--warn)}
+.qbars{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+.qbar{display:flex;flex-direction:column;gap:3px;font:500 10px/1 var(--font-data);color:var(--muted)}
+.qbar em{font-style:normal;color:var(--good)}
+.qbar i{position:relative;height:6px;background:rgba(255,255,255,.08);border-radius:2px}
+.qbar i::after{content:"";position:absolute;left:50%;top:-1px;bottom:-1px;width:1px;background:rgba(255,255,255,.3)}
+.qbar b{position:absolute;top:0;bottom:0;background:var(--good);border-radius:2px}
+.qrates{width:100%;border-collapse:collapse;font:500 11px/1 var(--font-data)}
+.qrates th{text-align:left;font-weight:500;color:var(--muted);padding:2px 4px 2px 0}
+.qrates td{padding:2px 2px}
+.qrates input{width:100%;box-sizing:border-box;padding:4px 5px;font:inherit}
 #ring{position:absolute;border-radius:50%;border:2px dashed rgba(255,255,255,.8);transform:translate(-50%,-50%)}
 #ring.on{border-style:solid;border-color:var(--good)}
 .osd{position:absolute;display:flex;gap:10px;font:500 12px/1 var(--font-data);color:var(--osd);text-shadow:var(--osd-shadow);letter-spacing:.03em;white-space:nowrap}
@@ -272,6 +291,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
       <div id="progress"><i></i></div>
       <div id="recMove" class="recmove" hidden>&#9679; RECORDING MOVE <span id="recT">0.0</span>s</div>
       <div id="count" class="count" hidden></div>
+      <div id="qOsd"><div class="osd qtl"><b id="qMode2">ACRO</b><span id="qArm" class="arm">DISARMED</span></div><div class="osd qtr"><span id="qTime">0:00</span></div><div class="qcross"></div><div id="qMsg" class="qmsg" hidden></div><div id="qTele" class="tele"></div></div>
     </div>
     <div id="fpvHud"><span class="fpvlab">FPV &middot; PILOT</span><div id="pilotInfo2" class="pilotinfo"></div></div>
     <div id="vstick" hidden><i></i></div>
@@ -294,6 +314,23 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <div class="row"><button class="btn small" id="btnCarStop" type="button">Stop car</button><button class="btn small" id="btnRec" type="button">Record move</button></div>
         <div class="row"><button class="btn small" id="btnMark" type="button" hidden>Go to pin</button></div>
         <p class="hint" id="recHint">Fly a move with the car rolling, then save it as a shot for your camera op.</p>
+      </div>
+      <div id="fpvTools" class="tools" hidden>
+        <label class="field" for="qSrc"><span>Controller</span><select id="qSrc"></select></label>
+        <div id="qBars" class="qbars"></div>
+        <div class="row"><button class="btn small" id="qCalBtn" type="button">Radio setup</button><button class="btn small" id="qReset" type="button">Reset (R)</button></div>
+        <div id="qCal" class="calib" hidden><span class="hint" id="qCalStep"></span><b id="qCalText"></b><div class="meter"><i id="qCalMeter"></i></div><div class="row"><button class="btn small" id="qCalSkip" type="button">Skip</button><button class="btn small" id="qCalCancel" type="button">Cancel</button></div></div>
+        <div class="field"><span>Flight mode</span><div class="seg small" id="qMode"></div></div>
+        <label class="field" for="qRateType"><span>Rates</span><select id="qRateType"><option value="actual">Actual (Betaflight 4.3+ default)</option><option value="betaflight">Betaflight (RC rate, super rate, expo)</option></select></label>
+        <table class="qrates"><thead><tr><th></th><th id="qH1">Center</th><th id="qH2">Max</th><th>Expo</th></tr></thead><tbody id="qRates"></tbody></table>
+        <p class="hint" id="qRateNote"></p>
+        <label class="field" for="qTilt"><span>Camera uptilt <b id="qTiltVal"></b></span><input type="range" id="qTilt" min="0" max="60" step="1"></label>
+        <label class="field" for="qLens"><span>Lens</span><select id="qLens"><option value="fisheye">Fisheye 155° (DJI O3, O4 Pro)</option><option value="rect">Rectilinear 120° (less warp)</option></select></label>
+        <label class="field" for="qMass"><span>All-up weight <b id="qMassVal"></b></span><input type="range" id="qMass" min="150" max="1500" step="10"></label>
+        <label class="field" for="qTw"><span>Thrust to weight <b id="qTwVal"></b></span><input type="range" id="qTw" min="2" max="16" step="0.5"></label>
+        <label class="field" for="qCar"><span>Car speed <b id="qCarVal"></b></span><input type="range" id="qCar" min="0" max="25" step="0.5"></label>
+        <div class="row"><button class="btn small" id="qCarStop" type="button">Stop car</button><button class="btn small" id="qMark" type="button" hidden>Go to pin</button></div>
+        <p class="hint">Keyboard: W/S throttle, A/D yaw, arrows or I/J/K/L pitch and roll. R resets, N goes to the next pin, [ and ] set the car speed, V swaps the views.</p>
       </div>
     </div>
   </aside>
@@ -620,6 +657,31 @@ const WASH={
   buffetTau:.12,             // s buffeting correlation time [ESTIMATED]
   vib:3                      // X9 residual vibration grows by this factor x wash [ESTIMATED]
 };
+// FPV quad (FPV mode only; the Inspire never uses these). A generic 5-inch freestyle quad on Betaflight. The airframe numbers are estimates
+// for a typical build until they are set to the pilot's own quad (weight and thrust to weight are in the FPV panel); the rate maths, idle
+// and Angle limit are Betaflight's own (docs/research/fpv-tango2-betaflight.md).
+const FPVQ={
+  hz:480,                    // physics steps per second [ESTIMATED: fast enough for a 30 ms rate loop]
+  propD:.127,props:4,        // m, 5-inch props
+  idle:.055,                 // motor idle, Betaflight motor_idle 550 = 5.5% [SPEC, betaflight src/main/pg/motor.c]
+  vPitch:55,                 // m/s prop pitch speed at full throttle, ~4.3 in pitch x ~30,000 rpm loaded; thrust falls to 0 at this inflow [ESTIMATED]
+  motorTau:.03,              // s motor spin-up and spin-down [ESTIMATED]
+  rateTau:.03,               // s for a tuned rate loop to follow its setpoint [ESTIMATED]
+  maxAngAcc:60000,           // deg/s^2 cap on angular acceleration [ESTIMATED]
+  cdA:[.012,.02,.012],       // m^2 drag area along body right, up and nose [ESTIMATED: sets top speed and free-fall speed, both in VALIDATION]
+  angleLimit:60,             // deg Angle-mode tilt limit, Betaflight angle_limit default [SPEC, betaflight src/main/flight/pid.c]
+  angleP:8,                  // 1/s Angle-mode levelling strength [TUNED]
+  crashV:5,                  // m/s impact speed that crashes it; slower touches land [ESTIMATED]
+  r:.12,                     // m collision radius, about half a 5-inch frame's motor-to-motor span [ESTIMATED]
+  respawnT:1.5,              // s on the crash screen before it resets
+  wash:{onset:.5,peak:1.2,clear:2,muClear:.6,   // same boundaries as WASH, on the quad's own v_h [ESTIMATED]
+        tau:.4,              // s memory of the displaced air [ESTIMATED]
+        buffet:100,          // deg/s rms rate disturbance in full wash [ESTIMATED]
+        buffetTau:.05,       // s [ESTIMATED]
+        loss:.15}            // share of thrust lost in full wash [ESTIMATED]
+};
+const FPV_CAM={fisheye:155,  // deg diagonal: the DJI O3 Air Unit and O4 Air Unit Pro lens [SPEC from retailer listings, verify against your camera]
+  rect:120};                 // deg diagonal for the low-distortion option [ESTIMATED]
 const LENSES=[
   {id:'18',label:'DL 18mm F2.8 ASPH',f:18},
   {id:'24',label:'DL 24mm F2.8 LS ASPH',f:24},
@@ -666,6 +728,12 @@ const FLIGHT_PROFILES={
 const clone=o=>JSON.parse(JSON.stringify(o));
 const DEFAULTS={v:3,units:'imperial',gimbalMode:'free',invertTilt:false,flightMode:'N',guides:true,ring:true,deadband:.04,camLayout:'right',screen:'rcplus',
   wind:{speed:0,dir:270,gust:'light'},physicsV2:false,aiImperfect:'low',challenge:false,fpvLens:'rect',gimbalCtl:'rcplus',gimbalExt:false,gear:'up',gimbalProfile:1,gimbalProfiles:GIMBAL_PROFILES,flightProfiles:FLIGHT_PROFILES};
+// FPV quad settings. Rates: Betaflight 4.3+ defaults, Actual 70 / 670 / 0 on every axis [SPEC, betaflight src/main/fc/controlrate_profile.c].
+// The "Betaflight" rate type starts at RC rate 1.00, super rate 0.70, expo 0 [ESTIMATED: a common starting point; enter your own].
+// 650 g all-up and 8:1 thrust to weight are a typical 6S 5-inch [ESTIMATED: weigh your quad, and take thrust from your motor's table].
+// Uptilt 25 deg [ESTIMATED: a common freestyle angle].
+DEFAULTS.fpvq={src:'auto',mode:'acro',rateType:'actual',rates:{roll:[70,670,0],pitch:[70,670,0],yaw:[70,670,0]},bfRates:{roll:[1,.7,0],pitch:[1,.7,0],yaw:[1,.7,0]},
+  uptilt:25,lens:'fisheye',mass:650,tw:8};
 const settings=Object.assign(clone(DEFAULTS),store.get('settings',{}));
 if(!SPEC.vmax[settings.flightMode])settings.flightMode='N';
 if(!(settings.v>=2)||!['right','fpv','split'].includes(settings.camLayout))settings.camLayout='right';
@@ -674,6 +742,7 @@ if(!(settings.v>=3)){settings.gimbalProfiles=clone(GIMBAL_PROFILES);settings.fli
 settings.v=3;
 for(const m in FLIGHT_PROFILES){if(!settings.flightProfiles[m])settings.flightProfiles[m]=clone(FLIGHT_PROFILES[m]);const f=settings.flightProfiles[m];if(f.rollExpo==null)f.rollExpo=FLIGHT_PROFILES[m].rollExpo;}
 if(!settings.wind||typeof settings.wind.speed!=='number')settings.wind=clone(DEFAULTS.wind);
+settings.fpvq=Object.assign(clone(DEFAULTS.fpvq),settings.fpvq||{});
 const gimbalProf=()=>settings.gimbalProfiles[settings.gimbalProfile]||settings.gimbalProfiles[1];
 const flightProf=()=>settings.flightProfiles[settings.flightMode]||settings.flightProfiles.N;
 const saveSettings=()=>store.set('settings',settings);
@@ -767,13 +836,19 @@ function grassTexture(repeatX,repeatZ){
   const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(repeatX,repeatZ);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return tex;
 }
 // Labelled pins for named spots in a map pack (an arch, a trailhead). A pack marks approximate positions in each pin's note.
+// Pin labels are upright boards that turn to face whichever camera draws them (faceLabels). A sprite would come out upside down in the
+// fisheye views, which draw through a cube camera whose side faces have their up axis pointing down.
+let markLabels=[];
+function faceLabels(p){for(const l of markLabels)l.rotation.y=Math.atan2(p.x-l.position.x,p.z-l.position.z);}
 function buildMarks(list){
+  markLabels=[];
   for(const m of list){const y=terrainH(m.x,m.z),mat=new THREE.MeshBasicMaterial({color:0xff8a1f});
     const pole=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,24,6),mat);pole.position.set(m.x,y+12,m.z);worldGroup.add(pole);
     const cv=document.createElement('canvas'),g=cv.getContext('2d');cv.width=512;cv.height=96;g.font='600 40px system-ui,sans-serif';
     const w=Math.min(504,g.measureText(m.name).width+40);g.fillStyle='rgba(16,23,26,.82)';g.fillRect((512-w)/2,8,w,80);g.fillStyle='#ff8a1f';g.fillRect((512-w)/2,8,6,80);
     g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(m.name,259,50);
-    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthWrite:false}));sp.scale.set(30,5.6,1);sp.position.set(m.x,y+27,m.z);worldGroup.add(sp);}
+    const sp=new THREE.Mesh(new THREE.PlaneGeometry(30,5.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthWrite:false,side:THREE.DoubleSide}));
+    sp.position.set(m.x,y+27,m.z);worldGroup.add(sp);markLabels.push(sp);}
 }
 function disposeWorld(){
   for(const o of worldGroup.children.slice()){worldGroup.remove(o);o.traverse(m=>{if(m.geometry)m.geometry.dispose();
@@ -1012,7 +1087,9 @@ const ghost=new THREE.Group();
 /* ---------- Cameras ---------- */
 const camMain=new THREE.PerspectiveCamera(40,16/9,.5,6000);camMain.rotation.order='YXZ';
 const camFPV=new THREE.PerspectiveCamera(62,16/9,.5,6000);camFPV.rotation.order='YXZ';camFPV.layers.enable(1);
-function setFar(v){camMain.far=camFPV.far=v;camMain.updateProjectionMatrix();camFPV.updateProjectionMatrix();}
+const camQ=new THREE.PerspectiveCamera(90,16/9,.05,6000);   // FPV quad mode: the quad's camera
+const camChase=new THREE.PerspectiveCamera(70,16/9,.1,6000);camChase.layers.enable(2);   // and a chase view (the quad mesh is on layer 2)
+function setFar(v){camMain.far=camFPV.far=camQ.far=camChase.far=v;for(const c of [camMain,camFPV,camQ,camChase])c.updateProjectionMatrix();}
 const hfovOf=f=>2*Math.atan(SPEC.sensorW/(2*f));
 const vfovOf=f=>2*Math.atan(Math.tan(hfovOf(f)/2)*9/16);
 
@@ -1576,6 +1653,8 @@ function padButtons(devs){
 }
 function onPadButton(i){
   if(calib.active)return;
+  // FPV mode: Menu pauses, A resumes, Y resets the quad; the Inspire's button actions stay out of it
+  if(fpvActive()){if(i===9)S.mode==='fpv'?pause():resume();else if(i===0&&S.mode==='paused')resume();else if(i===3&&S.mode==='fpv')fpvRespawn();return;}
   if(i===0)confirmAction();
   else if(i===9){if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();}
   else if(i===1){if(S.mode==='brief'||S.mode==='results')goHome();}
@@ -1822,7 +1901,7 @@ function pause(){if(S.mode==='paused')return;S.pausedFrom=S.mode;S.mode='paused'
 function resume(){if(S.mode!=='paused')return;S.mode=S.pausedFrom==='count'?'count':S.pausedFrom;showOverlay(null);}
 // Put back the flight mode and wind a drill borrowed
 function drillRestore(){if(S.drillPrev){settings.flightMode=S.drillPrev.mode;settings.wind=S.drillPrev.wind;S.drillPrev=null;}S.drill=null;drillGroup.visible=false;}
-function goHome(){stopRecord(false);drillRestore();S.markAt=null;renderMarkBtn();S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
+function goHome(){fpvExit();stopRecord(false);drillRestore();S.markAt=null;renderMarkBtn();S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
 function confirmAction(){if(S.mode==='brief'||S.mode==='results')roll();else if(S.mode==='paused')resume();}
 
 /* ---------- Move recording (sandbox) ---------- */
@@ -1884,9 +1963,237 @@ function stepWorld(dt){
 const stepping=()=>S.mode==='home'||S.mode==='run'||S.mode==='sandbox';
 function update(dt){
   pollInput(dt);calibStep(dt);if(DEV)devRec.poll(performance.now());
-  if(stepping()){if(phys2()){advanceWorld2(dt,h=>{if(stepping())stepWorld(h);});placeInterpolated(v2s.alpha);}else{stepWorld(dt);v2s.steps=1;}}
+  if(fpvActive())fpvUpdate(dt);
+  else if(stepping()){if(phys2()){advanceWorld2(dt,h=>{if(stepping())stepWorld(h);});placeInterpolated(v2s.alpha);}else{stepWorld(dt);v2s.steps=1;}}
   else{v2s.prev=null;v2s.steps=0;if(S.mode==='count'){S.cd-=dt;if(S.cd<=0){S.mode='run';S.t=0;}}}
 }
+
+/* ---------- FPV quad mode ---------- */
+// A second aircraft, separate from the Inspire: a 5-inch Betaflight quad in Acro (rate) or Angle mode, flown with an FPV radio in
+// USB joystick mode (TBS Tango 2 and other EdgeTX/OpenTX radios), a gamepad or the keyboard, on whatever map is loaded, with the
+// car driving its route. Constants: FPVQ, FPV_CAM and DEFAULTS.fpvq at the top of the script; method in docs/PHYSICS_SPEC.md §9.
+// Body axes follow the three.js camera: x right, y up (the thrust axis), nose along -z.
+const qd={pos:new THREE.Vector3(),vel:new THREE.Vector3(),q:new THREE.Quaternion(),w:new THREE.Vector3(),bw:new THREE.Vector3(),motor:0,thrust:0,
+  armed:false,armBlock:false,crashT:0,crashWhy:'',crashes:0,onGround:true,wash:0,acc:0,flyT:0,top:0,kbThr:0,spawn:null,chase:new THREE.Vector3(),warn:''};
+const qin={thr:0,yaw:0,pitch:0,roll:0,arm:null,src:'kb',label:'Keyboard'};
+const fpvActive=()=>S.mode==='fpv'||(S.mode==='paused'&&S.pausedFrom==='fpv');
+const qMesh=(()=>{const g=new THREE.Group(),dark=new THREE.MeshLambertMaterial({color:0x24282c}),prop=new THREE.MeshBasicMaterial({color:0xb8c0c4,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false});
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(.05,.035,.13),dark));
+  for(const [sx,sz] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const a=new THREE.Mesh(new THREE.BoxGeometry(.014,.008,.11),dark);a.position.set(sx*.039,0,sz*.039);a.rotation.y=Math.atan2(sx,sz);g.add(a);
+    const p=new THREE.Mesh(new THREE.CircleGeometry(.0635,20),prop);p.rotation.x=-Math.PI/2;p.position.set(sx*.078,.022,sz*.078);g.add(p);}
+  const c=new THREE.Mesh(new THREE.BoxGeometry(.028,.028,.024),new THREE.MeshLambertMaterial({color:0xe5402c}));c.position.set(0,.012,-.075);g.add(c);
+  g.traverse(o=>o.layers.set(2));g.visible=false;scene.add(g);return g;})();
+const _qa=new THREE.Vector3(),_qb=new THREE.Vector3(),_qc=new THREE.Vector3(),_qq=new THREE.Quaternion(),_qu=new THREE.Quaternion(),_qe=new THREE.Euler(0,0,0,'YXZ'),_qx=new THREE.Vector3(1,0,0);
+
+// Stick (-1..1) to rotation rate in deg/s, the way Betaflight does it [SPEC: betaflight/betaflight src/main/fc/rc.c, applyActualRates and
+// applyBetaflightRates, read 31 Oct 2026]; Betaflight caps every axis at 1998 deg/s (SETPOINT_RATE_LIMIT_MAX, same file).
+function fpvRate(ax,x){
+  const s=settings.fpvq,[a,b,e]=s[s.rateType==='betaflight'?'bfRates':'rates'][ax],X=Math.abs(x);
+  if(s.rateType==='betaflight'){
+    if(e)x=x*X**3*e+x*(1-e);let rc=a;if(rc>2)rc+=14.54*(rc-2);let r=200*rc*x;if(b)r*=1/clamp(1-X*b,.01,1);return clamp(r,-1998,1998);}
+  return clamp(x*a+Math.max(0,b-a)*X*(x**5*e+x*(1-e)),-1998,1998);   // Actual: a = centre sensitivity, b = max rate, e = expo
+}
+// Throttle that hovers in still air at the current air density [DERIVED: thrust = T_max x rho ratio x motor^2, motor = idle + (1 - idle) x throttle]
+function fpvHover(){const s=settings.fpvq;return clamp((Math.sqrt(1/(s.tw*airRho))-FPVQ.idle)/(1-FPVQ.idle),0,1);}
+// Hover induced velocity, v_h = sqrt(W / (2 rho A)) [DERIVED, momentum theory]: about 7.2 m/s for 650 g on four 5-inch props at sea level
+function fpvVh(){return Math.sqrt(settings.fpvq.mass/1000*GRAV/(2*1.225*airRho*FPVQ.props*Math.PI*(FPVQ.propD/2)**2));}
+const fpvSmooth=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+
+function fpvStep(h,inp){
+  const F=FPVQ,W=F.wash,s=settings.fpvq,m=s.mass/1000;
+  if(qd.crashT>0){qd.crashT-=h;if(qd.crashT<=0)fpvRespawn();return;}
+  // Arming: with an arm switch (found by Radio setup) the throttle has to be low when it goes on, like Betaflight; flipping it on with the
+  // throttle up blocks arming until the switch goes off again. With no switch the quad arms itself once the throttle is low.
+  const low=inp.thr<.05;
+  if(inp.arm==null){if(!qd.armed&&low)qd.armed=true;}
+  else if(!inp.arm){qd.armed=false;qd.armBlock=false;}
+  else if(!qd.armed){if(low&&!qd.armBlock)qd.armed=true;else qd.armBlock=true;}
+  if(qd.armed&&!qd.onGround)qd.flyT+=h;
+  // Rate setpoint. Acro: the sticks set rotation rates. Angle: they set a tilt, up to angle_limit, and a P term levels to it.
+  let spx,spz;const spy=-fpvRate('yaw',inp.yaw)*DEG;
+  if(s.mode==='angle'){_qe.setFromQuaternion(qd.q,'YXZ');const L=F.angleLimit*DEG;
+    spx=clamp((-inp.pitch*L-_qe.x)*F.angleP,-12,12);spz=clamp((-inp.roll*L-_qe.z)*F.angleP,-12,12);}
+  else{spx=-fpvRate('pitch',inp.pitch)*DEG;spz=-fpvRate('roll',inp.roll)*DEG;}
+  if(!qd.armed){spx=spz=0;}
+  // Prop wash: the Inspire's WASH idea on this quad's own v_h. Descending along the thrust axis at 0.5-2 v_h fills the props with their
+  // own downwash; airspeed across the disc carries it away. The level has memory (W.tau), shakes the rates and costs thrust.
+  _qa.set(0,1,0).applyQuaternion(qd.q);
+  const ax=qd.vel.x-wind.x,ay=qd.vel.y,az=qd.vel.z-wind.z,vAx=ax*_qa.x+ay*_qa.y+az*_qa.z,vh=fpvVh();
+  const r=Math.max(0,-vAx)/vh,mu=Math.sqrt(Math.max(0,ax*ax+ay*ay+az*az-vAx*vAx))/vh;
+  const bell=r<=W.peak?fpvSmooth(W.onset,W.peak,r):1-fpvSmooth(W.peak,W.clear,r);
+  qd.wash+=((qd.armed?bell*Math.exp(-((mu/W.muClear)**2)):0)-qd.wash)*(1-Math.exp(-h/W.tau));
+  let dbx=0,dbz=0;
+  if(qd.wash>1e-3){const sg=W.buffet*DEG*qd.wash,k=Math.sqrt(2*h/W.buffetTau),bx=qd.bw.x,bz=qd.bw.z;
+    qd.bw.x+=-qd.bw.x/W.buffetTau*h+sg*k*randn();qd.bw.z+=-qd.bw.z/W.buffetTau*h+sg*k*randn();dbx=qd.bw.x-bx;dbz=qd.bw.z-bz;}else qd.bw.set(0,0,0);
+  // Rate loop: a tuned Betaflight quad follows its setpoint within a few tens of ms
+  const kr=1-Math.exp(-h/F.rateTau),aMax=F.maxAngAcc*DEG*h;
+  if(!qd.onGround||qd.motor>F.idle*1.5){
+    qd.w.x+=clamp((spx-qd.w.x)*kr,-aMax,aMax)+dbx;qd.w.y+=clamp((spy-qd.w.y)*kr,-aMax,aMax);qd.w.z+=clamp((spz-qd.w.z)*kr,-aMax,aMax)+dbz;
+    const wl=qd.w.length();if(wl>1e-9){_qq.setFromAxisAngle(_qb.copy(qd.w).divideScalar(wl),wl*h);qd.q.multiply(_qq).normalize();}
+  }else qd.w.set(0,0,0);
+  // Thrust along the body up axis; it falls off as the air comes through the props faster (pitch speed) and with altitude
+  const cmd=qd.armed?F.idle+(1-F.idle)*clamp(inp.thr,0,1):0;qd.motor+=(cmd-qd.motor)*(1-Math.exp(-h/F.motorTau));
+  _qa.set(0,1,0).applyQuaternion(qd.q);
+  qd.thrust=s.tw*m*GRAV*airRho*qd.motor*qd.motor*clamp(1-vAx/F.vPitch,0,1.3)*(1-W.loss*qd.wash);
+  // Drag along each body axis from the air-relative velocity
+  _qb.set(ax,ay,az).applyQuaternion(_qu.copy(qd.q).invert());const rh=.5*1.225*airRho,cd=F.cdA;
+  _qc.set(-rh*cd[0]*Math.abs(_qb.x)*_qb.x,-rh*cd[1]*Math.abs(_qb.y)*_qb.y,-rh*cd[2]*Math.abs(_qb.z)*_qb.z).applyQuaternion(qd.q);
+  qd.vel.x+=(_qa.x*qd.thrust+_qc.x)/m*h;qd.vel.y+=((_qa.y*qd.thrust+_qc.y)/m-GRAV)*h;qd.vel.z+=(_qa.z*qd.thrust+_qc.z)/m*h;
+  qd.pos.addScaledVector(qd.vel,h);
+  fpvCollide(h);
+}
+// Ground: a gentle touch lands (it can take off again); hitting it hard, or upside down, crashes. Trees, buildings and the car crash it.
+function fpvCollide(h){
+  if(qd.noCollide)return;   // physics-only self-tests
+  const F=FPVQ,p=qd.pos,gh=terrainH(p.x,p.z),sp=qd.vel.length();
+  if(p.y<gh+F.r){
+    _qa.set(0,1,0).applyQuaternion(qd.q);
+    if(sp>F.crashV||_qa.y<.3){fpvCrash('hit the ground at '+fmtSpd(sp));return;}
+    p.y=gh+F.r;if(qd.vel.y<0)qd.vel.y=0;const f=Math.exp(-6*h);qd.vel.x*=f;qd.vel.z*=f;
+    qd.onGround=qd.motor<F.idle*1.5||qd.thrust<settings.fpvq.mass/1000*GRAV;
+    if(qd.onGround){_qe.setFromQuaternion(qd.q,'YXZ');_qu.setFromEuler(_qe.set(0,_qe.y,0,'YXZ'));qd.q.slerp(_qu,1-Math.exp(-8*h));}
+  }else if(p.y>gh+F.r+.05)qd.onGround=false;
+  let hit='';treesNear(p.x,p.z,t=>{if(hit||p.y<t.b||p.y>t.b+t.H)return;if(Math.hypot(t.x-p.x,t.z-p.z)<t.r*(1-(p.y-t.b)/t.H)+F.r)hit='hit a tree';});
+  if(!hit&&bldgs.length)buildingsNear(p.x,p.z,b=>{if(!hit&&p.y<b.top+F.r&&p.y>b.base-1&&p.x>=b.x0-F.r&&p.x<=b.x1+F.r&&p.z>=b.z0-F.r&&p.z<=b.z1+F.r&&pointInPoly(b.p,p.x,p.z))hit='hit a building';});
+  if(!hit){const dx=p.x-car.x,dz=p.z-car.z,c=Math.cos(car.yaw),sn=Math.sin(car.yaw),lr=dx*c-dz*sn,lf=-dx*sn-dz*c,dy=p.y-car.y;
+    if(Math.abs(lf)<2.4+F.r&&Math.abs(lr)<.95+F.r&&dy>-.2&&dy<1.45+F.r)hit='hit the car';}
+  if(!hit&&(Math.abs(p.x-world.TC.x)>world.hx+60||Math.abs(p.z-world.TC.z)>world.hz+60))hit='left the map';
+  if(hit)fpvCrash(hit);
+}
+function fpvCrash(why){qd.crashT=FPVQ.respawnT;qd.crashWhy=why;qd.crashes++;qd.armed=false;qd.armBlock=true;qd.motor=0;qd.vel.set(0,0,0);qd.w.set(0,0,0);}
+// Spawn points: on the ground beside the road ahead of the car, or near a map pin (the most open of eight bearings, facing the pin)
+function fpvSpawnRoad(){const r=roadAt(car.s+30),side=ROAD_W/2+4,x=r.x+Math.cos(r.yaw)*side,z=r.z-Math.sin(r.yaw)*side;qd.spawn={x,z,yaw:r.yaw};fpvRespawn();}
+function fpvSpawnMark(i){
+  const M=world.marks||[];if(!M.length)return;S.markAt=((i%M.length)+M.length)%M.length;const m=M[S.markAt],gy=terrainH(m.x,m.z);let best=null;
+  for(let b=0;b<360;b+=45){const sx=Math.sin(b*DEG),sz=-Math.cos(b*DEG);let top=gy;for(let d=5;d<=40;d+=5)top=Math.max(top,terrainH(m.x+sx*d,m.z+sz*d));if(!best||top<best.top)best={top,sx,sz};}
+  const x=m.x+best.sx*40,z=m.z+best.sz*40;qd.spawn={x,z,yaw:Math.atan2(-(m.x-x),-(m.z-z))};fpvRespawn();fpvRenderMark();toast(m.name+(m.note?'. '+m.note:''),7000);
+}
+function fpvRespawn(){
+  const sp=qd.spawn||{x:car.x,z:car.z,yaw:car.yaw};qd.pos.set(sp.x,terrainH(sp.x,sp.z)+FPVQ.r,sp.z);qd.vel.set(0,0,0);qd.w.set(0,0,0);qd.bw.set(0,0,0);
+  qd.q.setFromEuler(_qe.set(0,sp.yaw,0,'YXZ'));qd.motor=0;qd.thrust=0;qd.wash=0;qd.crashT=0;qd.onGround=true;qd.armed=false;qd.flyT=0;qd.top=0;qd.kbThr=0;qd.acc=0;
+  qd.chase.set(qd.pos.x+Math.sin(sp.yaw)*1.5,qd.pos.y+.5,qd.pos.z+Math.cos(sp.yaw)*1.5);fpvPlace(0);
+}
+function startFpv(){
+  stopRecord(false);drillRestore();S.shot=SANDBOX;S.mode='fpv';S.t=0;S.crash=null;S.markAt=null;cruise.on=false;ghost.visible=false;
+  car.v=S.carStopped?0:S.sandSpeed;qMesh.visible=true;qd.crashes=0;fpvSpawnRoad();showOverlay(null);applyRoleView();renderFpvTools();
+  toast(qin.src==='radio'?'FPV quad on '+qin.label+'. Throttle down to arm.':'FPV quad. Plug in your radio (USB joystick mode) or use W/S throttle, A/D yaw, arrows to pitch and roll.',7000);
+}
+function fpvExit(){qMesh.visible=false;qcalCancel();S.qSwap=false;}
+function fpvUpdate(dt){
+  fpvInput(dt);
+  if(S.mode!=='fpv')return;
+  S.t+=dt;carStep(car,dt,S.carStopped?0:S.sandSpeed);placeCarMesh(dt);
+  drone.pos.copy(qd.pos);windStep(dt);   // wind and air density at the quad
+  const h=1/FPVQ.hz;qd.acc+=dt;let n=0;while(qd.acc>=h-1e-9&&n<60){qd.acc-=h;fpvStep(h,qin);n++;}if(n>=60)qd.acc=0;
+  qd.top=Math.max(qd.top,qd.vel.length());fpvPlace(dt);
+}
+// Cameras: the FPV camera is fixed to the frame with the uptilt; the chase camera trails behind and above the quad's heading
+function fpvPlace(dt){
+  qMesh.position.copy(qd.pos);qMesh.quaternion.copy(qd.q);qMesh.updateMatrixWorld();
+  camQ.position.copy(_qa.set(0,.02,-.06).applyQuaternion(qd.q).add(qd.pos));
+  camQ.quaternion.copy(qd.q).multiply(_qu.setFromAxisAngle(_qx,settings.fpvq.uptilt*DEG));camQ.updateMatrixWorld();
+  _qa.set(0,0,-1).applyQuaternion(qd.q);const yawH=Math.hypot(_qa.x,_qa.z)>.05?Math.atan2(-_qa.x,-_qa.z):drone.yaw;
+  drone.pos.copy(qd.pos);drone.yaw=yawH;
+  _qb.set(qd.pos.x+Math.sin(yawH)*1.5,qd.pos.y+.5,qd.pos.z+Math.cos(yawH)*1.5);
+  if(dt>0)qd.chase.lerp(_qb,1-Math.exp(-6*dt));else qd.chase.copy(_qb);
+  qd.chase.y=Math.max(qd.chase.y,terrainH(qd.chase.x,qd.chase.z)+.4);
+  camChase.position.copy(qd.chase);camChase.lookAt(qd.pos);camChase.updateMatrixWorld();
+}
+
+/* FPV controls: an FPV radio in USB joystick mode, a standard gamepad (Mode 2) or the keyboard */
+// EdgeTX/OpenTX joystick mode sends channels 1-8 as the 8 axes in channel order [SPEC: OpenTX 2.2 manual, "Joystick emulation"; EdgeTX
+// manual, USB Joystick, Classic mode]. Until Radio setup runs, assume Betaflight's default AETR order: CH1 roll, CH2 pitch, CH3 throttle,
+// CH4 yaw [ASSUMED: the browser's axis order and the radio's channel order both need checking, which Radio setup does], with no arm switch.
+const QRADIO_DEFAULT={roll:{axis:0,c:0,e:1},pitch:{axis:1,c:0,e:1},thr:{axis:2,lo:-1,hi:1},yaw:{axis:3,c:0,e:1},arm:null};
+let qRadios=store.get('fpvRadio',{});
+const fpvRadioMap=d=>qRadios[d.ckey]||null;
+function fpvDevices(){return lastDevs.filter(d=>d.kind==='generic'||d.kind==='standard');}
+function fpvDevice(){const src=settings.fpvq.src||'auto',L=fpvDevices();if(src==='kb')return null;
+  return(src!=='auto'&&L.find(d=>d.ckey===src))||L.find(d=>d.kind==='generic'&&d.axes.length>=4)||L.find(d=>d.kind==='standard')||null;}
+const qAx=(m,d)=>{if(!m||m.axis>=d.axes.length)return 0;const den=m.e-m.c;return Math.abs(den)<.15?0:clamp((d.axes[m.axis]-m.c)/den,-1,1);};
+function fpvInput(dt){
+  qcalStep(dt);const d=fpvDevice(),k=qin;
+  qd.kbThr=clamp(qd.kbThr+kd('KeyW','KeyS')*.6*dt,0,1);
+  if(d&&d.kind==='generic'){const R=Object.assign({},QRADIO_DEFAULT,fpvRadioMap(d)||{});
+    k.thr=R.thr.axis<d.axes.length&&Math.abs(R.thr.hi-R.thr.lo)>.15?clamp((d.axes[R.thr.axis]-R.thr.lo)/(R.thr.hi-R.thr.lo),0,1):0;
+    k.yaw=qAx(R.yaw,d);k.pitch=qAx(R.pitch,d);k.roll=qAx(R.roll,d);
+    k.arm=R.arm&&R.arm.axis<d.axes.length?(d.axes[R.arm.axis]-R.arm.off)/(R.arm.on-R.arm.off)>.5:null;k.src='radio';k.label=d.label+(fpvRadioMap(d)?'':' (not set up)');}
+  else if(d){const a=d.axes,db=v=>Math.abs(v)<settings.deadband?0:v;   // Mode 2: left stick up from centre is throttle, so centre = motors at idle
+    k.thr=clamp(-(a[1]||0),0,1);k.yaw=db(a[0]||0);k.pitch=db(-(a[3]||0));k.roll=db(a[2]||0);k.arm=null;k.src='pad';k.label=d.label;}
+  else{k.thr=qd.kbThr;k.yaw=kb.yaw;k.pitch=clamp(kb.pitch+kb.tilt,-1,1);k.roll=clamp(kb.roll+kb.pan,-1,1);k.arm=null;k.src='kb';k.label='Keyboard';}
+}
+// Radio setup: separate from the Inspire's Stick setup. Records each channel's axis and direction; throttle records its low and high ends.
+const QCAL=[{fn:'thr',text:'Start with the throttle DOWN and the arm switch OFF. THROTTLE: now push it all the way UP and hold',back:'Now bring the throttle back DOWN.'},
+  {fn:'yaw',text:'YAW: push the left stick fully RIGHT and hold'},{fn:'pitch',text:'PITCH: push the right stick fully FORWARD and hold'},
+  {fn:'roll',text:'ROLL: push the right stick fully RIGHT and hold'},{fn:'arm',text:'ARM SWITCH: flip it to ARMED and hold. No arm switch? Press Skip.'}];
+const qcal={active:false,i:0,phase:'push',hold:0,base:null,cand:null,map:{},dev:null,ckey:null,used:new Set()};
+function qcalStart(){const d=fpvDevice();if(!d||d.kind!=='generic'){toast('No radio found. Plug in the radio, choose USB Joystick on its screen, then move a stick and try again.');return;}
+  Object.assign(qcal,{active:true,i:0,phase:'push',hold:0,cand:null,map:{},dev:d.key,ckey:d.ckey,used:new Set(),base:Array.from(d.axes)});$('#qCal').hidden=false;qcalUI();}
+function qcalStep(dt){
+  if(!qcal.active)return;const d=lastDevs.find(x=>x.key===qcal.dev);if(!d){qcalCancel();return;}const st=QCAL[qcal.i];
+  if(qcal.phase==='push'){let best=null;
+    d.axes.forEach((v,ax)=>{if(qcal.used.has(ax))return;const dv=v-qcal.base[ax];if(!best||Math.abs(dv)>Math.abs(best.dv))best={ax,dv,v};});
+    const mag=best?Math.abs(best.dv):0;$('#qCalMeter').style.width=clamp(mag/.8*100,0,100)+'%';
+    if(best&&mag>.6){if(qcal.cand&&qcal.cand.ax===best.ax){qcal.hold+=dt;qcal.cand.v=best.v;}else{qcal.cand={ax:best.ax,v:best.v};qcal.hold=0;}
+      if(qcal.hold>.45){const c=qcal.base[qcal.cand.ax],v=qcal.cand.v,ax=qcal.cand.ax;
+        qcal.map[st.fn]=st.fn==='thr'?{axis:ax,lo:c,hi:v}:st.fn==='arm'?{axis:ax,off:c,on:v}:{axis:ax,c,e:v};qcal.used.add(ax);
+        if(st.fn==='arm'){qcalNext();return;}qcal.phase='release';qcal.hold=0;qcalUI();}}
+    else qcal.hold=0;
+  }else{const m=qcal.map[st.fn],rest=st.fn==='thr'?m.lo:m.c;
+    if(Math.abs(d.axes[m.axis]-rest)<.15){qcal.hold+=dt;if(qcal.hold>.25)qcalNext();}else qcal.hold=0;}
+}
+function qcalNext(){const d=lastDevs.find(x=>x.key===qcal.dev);qcal.i++;qcal.phase='push';qcal.hold=0;qcal.cand=null;if(d)qcal.base=Array.from(d.axes);
+  if(qcal.i>=QCAL.length)qcalFinish();else qcalUI();}
+function qcalFinish(){
+  const map=Object.assign({},QRADIO_DEFAULT,qcal.map);if(!qcal.map.arm)map.arm=null;
+  qRadios[qcal.ckey]=map;store.set('fpvRadio',qRadios);qcal.active=false;$('#qCal').hidden=true;renderFpvTools();
+  toast('Radio saved: throttle CH'+(map.thr.axis+1)+', yaw CH'+(map.yaw.axis+1)+', pitch CH'+(map.pitch.axis+1)+', roll CH'+(map.roll.axis+1)+(map.arm?', arm CH'+(map.arm.axis+1):', no arm switch')+' (browser axis numbers).',7000);
+}
+function qcalCancel(){qcal.active=false;const b=$('#qCal');if(b)b.hidden=true;}
+function qcalUI(){const st=QCAL[qcal.i];$('#qCalStep').textContent='Radio setup · step '+(qcal.i+1)+' of '+QCAL.length;
+  $('#qCalText').textContent=qcal.phase==='push'?st.text:(st.back||'Got it. Let the stick return to centre.');$('#qCalMeter').style.width='0%';}
+
+/* FPV panel and OSD */
+function renderFpvTools(){
+  const s=settings.fpvq,L=fpvDevices();
+  $('#qSrc').innerHTML='<option value="auto">Auto ('+esc(fpvDevice()?fpvDevice().label:'keyboard')+')</option>'+L.map(d=>'<option value="'+esc(d.ckey)+'">'+esc(d.label)+(d.kind==='standard'?' (gamepad)':' (radio)')+'</option>').join('')+'<option value="kb">Keyboard</option>';
+  $('#qSrc').value=L.some(d=>d.ckey===s.src)||s.src==='kb'?s.src:'auto';
+  $('#qMode').innerHTML=segHTML([{id:'acro',label:'Acro',title:'Rate mode: the sticks set rotation rates (Betaflight default)'},{id:'angle',label:'Angle',title:'Self-levelling, tilt up to 60 degrees'}],s.mode,'qm');
+  $('#qRateType').value=s.rateType;const bf=s.rateType==='betaflight',R=s[bf?'bfRates':'rates'];
+  $('#qH1').textContent=bf?'RC rate':'Center';$('#qH2').textContent=bf?'Super':'Max';
+  $('#qRates').innerHTML=['roll','pitch','yaw'].map(ax=>'<tr><th>'+ax[0].toUpperCase()+ax.slice(1)+'</th>'+R[ax].map((v,i)=>'<td><input type="number" data-qr="'+ax+':'+i+'" value="'+v+'" step="'+(bf||i===2?'0.01':'10')+'" min="0" max="'+(bf?(i===0?2.55:i===1?1:1):(i===2?1:2000))+'"></td>').join('')+'</tr>').join('');
+  $('#qRateNote').textContent='Full stick: roll '+Math.round(fpvRate('roll',1))+'°/s, pitch '+Math.round(fpvRate('pitch',1))+'°/s, yaw '+Math.round(fpvRate('yaw',1))+'°/s. Copy these from your Betaflight Rates tab.';
+  $('#qTilt').value=s.uptilt;$('#qTiltVal').textContent=s.uptilt+'°';$('#qLens').value=s.lens;
+  $('#qMass').value=s.mass;$('#qMassVal').textContent=s.mass+' g';$('#qTw').value=s.tw;$('#qTwVal').textContent=(+s.tw).toFixed(1)+':1 · hover ~'+Math.round(fpvHover()*100)+'%';
+  $('#qCar').value=S.sandSpeed;$('#qCarVal').textContent=fmtSpd(S.sandSpeed);$('#qCarStop').textContent=S.carStopped?'Start car':'Stop car';fpvRenderMark();
+}
+function fpvRenderMark(){const M=world.marks||[],b=$('#qMark');b.hidden=!M.length;if(M.length)b.textContent='Go to '+M[((S.markAt==null?-1:S.markAt)+1)%M.length].name;}
+let qBarsN=-1,qDevKey=null;
+function fpvBars(){
+  if(!fpvActive())return;const d=fpvDevice(),box=$('#qBars');
+  if((d?d.key:'')!==qDevKey){qDevKey=d?d.key:'';qBarsN=-1;renderFpvTools();}   // a radio was plugged in or unplugged
+  if(!d){if(qBarsN!==0){box.innerHTML='<p class="hint">No radio or gamepad seen. Plug the radio in, pick USB Joystick on its screen, then move a stick.</p>';qBarsN=0;}return;}
+  const n=Math.min(8,d.axes.length),R=d.kind==='generic'?Object.assign({},QRADIO_DEFAULT,fpvRadioMap(d)||{}):null,role={};
+  if(R)for(const f of ['thr','yaw','pitch','roll','arm'])if(R[f])role[R[f].axis]=f==='thr'?'THR':f.toUpperCase();
+  if(qBarsN!==n){box.innerHTML=Array.from({length:n},(_,i)=>'<div class="qbar"><span>'+(d.kind==='generic'?'CH'+(i+1):'AX'+i)+'<em></em></span><i><b></b></i></div>').join('');qBarsN=n;}
+  box.querySelectorAll('.qbar').forEach((e,i)=>{const v=clamp(d.axes[i]||0,-1,1);e.querySelector('b').style.cssText='left:'+(v<0?50+v*50:50)+'%;width:'+Math.abs(v)*50+'%';e.querySelector('em').textContent=role[i]?' '+role[i]:'';});
+}
+function fpvHud(){
+  const s=settings.fpvq,gh=terrainH(qd.pos.x,qd.pos.z),agl=qd.pos.y-gh,spd=qd.vel.length(),dc=Math.hypot(qd.pos.x-car.x,qd.pos.y-car.y-1,qd.pos.z-car.z);
+  const t=Math.floor(qd.flyT),mm=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+  el.slate.textContent='FPV QUAD · '+s.mode.toUpperCase()+' · '+qin.label.toUpperCase();
+  if(++hudTick%3)return;
+  $('#qMode2').textContent=s.mode.toUpperCase();$('#qArm').textContent=qd.armed?'ARMED':'DISARMED';$('#qArm').className=qd.armed?'arm on':'arm';$('#qTime').textContent=mm;
+  let msg='';
+  if(qd.crashT>0)msg='CRASHED: '+qd.crashWhy;
+  else if(!qd.armed)msg=qin.arm==null?'THROTTLE DOWN TO ARM':qd.armBlock&&qin.arm?'ARMING BLOCKED: switch off, throttle down, switch on':'FLIP THE ARM SWITCH';
+  else if(agl>121.9)msg='ABOVE 400 FT AGL';
+  $('#qMsg').textContent=msg;$('#qMsg').hidden=!msg;
+  $('#qTele').innerHTML='<span><em>THR</em> '+Math.round(qin.thr*100)+'%</span><span><em>SPD</em> '+fmtSpd(spd)+'</span><span><em>TOP</em> '+fmtSpd(qd.top)+'</span><span><em>ALT</em> '+fmtLen(agl)+'</span><span><em>CAR</em> '+fmtLen(dc)+'</span>'+
+    (qd.wash>.15?'<span class="warnc"><em>WASH</em> '+Math.round(qd.wash*100)+'%</span>':'')+(settings.wind.speed>0?'<span><em>WIND</em> '+fmtSpd(Math.hypot(wind.x,wind.z))+' '+compass(settings.wind.dir)+'</span>':'')+'<span><em>CRASHES</em> '+qd.crashes+'</span>';
+  fpvBars();
+}
+const fpvCard=()=>'<button class="shot sandbox" type="button" data-shot="fpv"><div class="shot-top"><span>FPV QUAD</span><span>ACRO · RADIO</span></div><h4>FPV Free Fly</h4><p>A 5-inch Betaflight quad on this map, with the car on its route. Fly it with an FPV radio in USB joystick mode (TBS Tango 2 and other EdgeTX radios), a gamepad or the keyboard.</p><div class="specs"><span>Rates <b>Betaflight</b></span><span>Lens <b>'+(settings.fpvq.lens==='fisheye'?FPV_CAM.fisheye:FPV_CAM.rect)+'°</b></span></div><div class="best"><span>Reset</span><b>R</b></div></button>';
 
 /* ---------- HUD ---------- */
 const imperial=()=>settings.units==='imperial';
@@ -1899,6 +2206,7 @@ const el={rec:$('#rec'),tc:$('#tc'),lensTag:$('#lensTag'),pan:$('#panGauge i'),p
   ring:$('#ring'),zone:$('#zone'),tele:$('#tele'),prog:$('#progress i'),count:$('#count'),warn:$('#warn'),pi:$('#pilotInfo'),pi2:$('#pilotInfo2'),
   liveRows:$('#liveRows'),slate:$('#slate'),frame:$('#frame')};
 function hud(){
+  if(fpvActive()){fpvHud();return;}
   const sh=S.shot,running=S.mode==='run',st=seats();
   el.rec.textContent=running?'REC':S.mode==='sandbox'?'LIVE':'STBY';el.rec.className='rec'+(running?' live':'');
   el.tc.textContent=timecode(running||S.mode==='sandbox'?S.t:0);
@@ -1978,9 +2286,10 @@ function drawMap(){
     g.font=(10*dpr)+'px IBM Plex Mono, monospace';g.fillStyle='#f4f1ea';g.fillText(m.name,x+6*dpr,y+3*dpr);}
   if(ghost.visible){g.strokeStyle='#62d08b';g.lineWidth=1.5*dpr;g.beginPath();g.arc(X(P.x),Y(P.z),Math.max(4*dpr,S.shot.tolM*k),0,TAU);g.stroke();}
   // camera wedge
-  const hf=hfovOf(S.focal),len=Math.min(span*1.4,400),dx=X(drone.pos.x),dy=Y(drone.pos.z);
+  const fq=fpvActive(),hf=!fq?hfovOf(S.focal):settings.fpvq.lens==='fisheye'?FPV_CAM.fisheye*16/Math.hypot(16,9)*DEG:2*Math.atan(Math.tan(FPV_CAM.rect/2*DEG)*16/Math.hypot(16,9)),
+    pan=fq?drone.yaw:gim.pan,len=Math.min(span*1.4,400),dx=X(drone.pos.x),dy=Y(drone.pos.z);
   g.fillStyle='rgba(244,241,234,.13)';g.beginPath();g.moveTo(dx,dy);
-  for(const a of [gim.pan+hf/2,gim.pan-hf/2])g.lineTo(X(drone.pos.x-Math.sin(a)*len),Y(drone.pos.z-Math.cos(a)*len));g.closePath();g.fill();
+  for(const a of [pan+hf/2,pan-hf/2])g.lineTo(X(drone.pos.x-Math.sin(a)*len),Y(drone.pos.z-Math.cos(a)*len));g.closePath();g.fill();
   // car
   g.save();g.translate(X(car.x),Y(car.z));g.rotate(-car.yaw);const cl=Math.max(7*dpr,4.6*k),cw=Math.max(4*dpr,1.9*k);
   g.fillStyle='#f4f1ea';g.fillRect(-cw/2,-cl/2,cw,cl);g.fillStyle='#a8261c';g.fillRect(-cw/2,-cl/2,cw,cl*.25);g.restore();
@@ -2003,15 +2312,16 @@ function drawMap(){
 /* ---------- Layout and render ---------- */
 let W=1,H=1,mainRect={x:0,y:0,w:0,h:0},fpvRect={x:0,y:0,w:0,h:0};
 // RC Plus layout: the take panel opens by itself in the sandbox (car and recording tools); T or Panel overrides
-const panelOpen=()=>S.panelPref!=null?S.panelPref:S.mode==='sandbox'||(S.mode==='paused'&&S.pausedFrom==='sandbox');
+const panelOpen=()=>S.panelPref!=null?S.panelPref:S.mode==='sandbox'||(S.mode==='paused'&&S.pausedFrom==='sandbox')||fpvActive();
 function togglePanel(){S.panelPref=!panelOpen();applyRoleView();}
 function applyRoleView(){
-  S.split=S.role==='dual'&&S.mode!=='home';S.swap=S.role==='pilot'&&S.mode!=='home'?(S.swapPref!=null?S.swapPref:true):(S.swapPref&&S.role!=='dual'?true:false);
-  if(S.mode==='home')S.swap=false;
-  app.classList.toggle('split',S.split);app.classList.toggle('fpvmain',S.swap&&!S.split);app.classList.toggle('panel',panelOpen());
-  $('#fpvLabel').textContent=S.swap?'CAM · X9':'FPV · PILOT';
-  $('#sandTools').hidden=S.mode!=='sandbox'&&!(S.mode==='paused'&&S.pausedFrom==='sandbox');
-  $('#liveTitle').textContent=S.mode==='sandbox'?'Sandbox':'Live take';
+  const fq=fpvActive();
+  S.split=!fq&&S.role==='dual'&&S.mode!=='home';S.swap=S.role==='pilot'&&S.mode!=='home'?(S.swapPref!=null?S.swapPref:true):(S.swapPref&&S.role!=='dual'?true:false);
+  if(S.mode==='home'||fq)S.swap=false;
+  app.classList.toggle('split',S.split);app.classList.toggle('fpvmain',S.swap&&!S.split);app.classList.toggle('panel',panelOpen());app.classList.toggle('fpvq',fq);
+  $('#fpvLabel').textContent=fq?(S.qSwap?'FPV · QUAD':'CHASE CAM'):S.swap?'CAM · X9':'FPV · PILOT';
+  $('#sandTools').hidden=S.mode!=='sandbox'&&!(S.mode==='paused'&&S.pausedFrom==='sandbox');$('#fpvTools').hidden=!fq;
+  $('#liveTitle').textContent=fq?'FPV quad':S.mode==='sandbox'?'Sandbox':'Live take';
   $('#stCamLab').textContent=S.role==='pilot'?'CAMERA · AI OP':'CAMERA';$('#stPilLab').textContent=S.role==='camera'?'PILOT · AUTO':'PILOT';
   layout();
 }
@@ -2055,17 +2365,19 @@ function fishSetup(size){
     {const q=new THREE.Mesh(new THREE.PlaneGeometry(2,2),fish.mat);q.frustumCulled=false;fish.scene.add(q);}}
   fish.mat.uniforms.env.value=fish.rt.texture;fish.size=size;
 }
-function viewFisheye(r){
+function viewFisheye(r,cam=camFPV,half=80.5*DEG,near=.5){
   const size=Math.min(1024,Math.max(256,2**Math.ceil(Math.log2(r.h))));fishSetup(size);
-  fish.cube.position.copy(camFPV.position);fish.cube.rotation.set(0,0,0);fish.cube.updateMatrixWorld();sky.position.copy(camFPV.position);
+  faceLabels(cam.position);fish.cube.position.copy(cam.position);fish.cube.rotation.set(0,0,0);fish.cube.updateMatrixWorld();sky.position.copy(cam.position);
+  for(const c of fish.cube.children)if(c.near!==near){c.near=near;c.updateProjectionMatrix();}
   renderer.setScissorTest(false);fish.cube.update(renderer,scene);renderer.setScissorTest(true);renderer.setRenderTarget(null);
-  fish.mat.uniforms.rot.value.setFromMatrix4(camFPV.matrixWorld);fish.mat.uniforms.aspect.value=r.w/r.h;
+  fish.mat.uniforms.rot.value.setFromMatrix4(cam.matrixWorld);fish.mat.uniforms.halfAng.value=half;fish.mat.uniforms.aspect.value=r.w/r.h;
   const y=H-r.y-r.h;renderer.setViewport(r.x,y,r.w,r.h);renderer.setScissor(r.x,y,r.w,r.h);renderer.render(fish.scene,fish.cam);
 }
 function view(cam,r){
   if(r.w<2||r.h<2)return;
   if(cam===camFPV&&settings.fpvLens==='fisheye'){viewFisheye(r);return;}
-  cam.aspect=r.w/r.h;cam.updateProjectionMatrix();sky.position.copy(cam.position);
+  if(cam===camQ){if(settings.fpvq.lens==='fisheye'){viewFisheye(r,camQ,FPV_CAM.fisheye/2*DEG,.05);return;}cam.fov=2*Math.atan(Math.tan(FPV_CAM.rect/2*DEG)/Math.hypot(r.w/r.h,1))/DEG;}
+  cam.aspect=r.w/r.h;cam.updateProjectionMatrix();sky.position.copy(cam.position);faceLabels(cam.position);
   const y=H-r.y-r.h;renderer.setViewport(r.x,y,r.w,r.h);renderer.setScissor(r.x,y,r.w,r.h);renderer.render(scene,cam);
 }
 function render(){
@@ -2073,7 +2385,7 @@ function render(){
   renderer.setScissorTest(true);renderer.setViewport(0,0,W,H);renderer.setScissor(0,0,W,H);renderer.setClearColor(0x0c0e0f);renderer.clear();
   renderer.setClearColor(HORIZON);
   renderer.shadowMap.needsUpdate=true;
-  const mainCam=S.swap&&!S.split?camFPV:camMain,sideCam=mainCam===camMain?camFPV:camMain;
+  const fq=fpvActive(),mainCam=fq?(S.qSwap?camChase:camQ):S.swap&&!S.split?camFPV:camMain,sideCam=fq?(S.qSwap?camQ:camChase):mainCam===camMain?camFPV:camMain;
   view(mainCam,mainRect);view(sideCam,fpvRect);
   drawMap();
 }
@@ -2103,7 +2415,7 @@ function shotCard(sh){
 }
 function renderHome(){
   document.querySelectorAll('.role').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.role===S.role)));
-  $('#shotGrid').innerHTML='<button class="shot sandbox" type="button" data-shot="sandbox"><div class="shot-top"><span>SANDBOX</span><span>NO CLOCK</span></div><h4>Free Fly</h4><p>'+esc(SANDBOX.brief)+'</p><div class="specs"><span>Lens <b>any</b></span><span>Car <b>you set it</b></span></div><div class="best"><span>Record moves here</span><b>M</b></div></button>'+BUILTIN.map(shotCard).join('');
+  $('#shotGrid').innerHTML='<button class="shot sandbox" type="button" data-shot="sandbox"><div class="shot-top"><span>SANDBOX</span><span>NO CLOCK</span></div><h4>Free Fly</h4><p>'+esc(SANDBOX.brief)+'</p><div class="specs"><span>Lens <b>any</b></span><span>Car <b>you set it</b></span></div><div class="best"><span>Record moves here</span><b>M</b></div></button>'+fpvCard()+BUILTIN.map(shotCard).join('');
   renderLocations();
   const here=shotsHere(),away=myShots.length-here.length;
   $('#myGrid').innerHTML=here.length?here.map(shotCard).join('')+(away?'<p class="hint" style="grid-column:1/-1">'+away+' more recorded at other locations.</p>':''):'<p class="muted" style="grid-column:1/-1">No custom shots yet. Open the Free Fly sandbox in the Pilot or Dual seat, start the car, press <b>Record move</b>, fly the shot, and save it. It shows up here for any seat and can be sent to trainees as a shot pack.</p>';
@@ -2593,7 +2905,7 @@ $('#setReset').onclick=()=>{Object.assign(settings,clone(DEFAULTS));saveSettings
 
 /* ---------- Wiring ---------- */
 function openDrawer(id){
-  if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();
+  if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox'||S.mode==='fpv')pause();
   for(const d of ['controls','settings'])$('#'+d).hidden=d!==id;
   if(id==='controls')renderControls();if(id==='settings')renderSettings();
 }
@@ -2602,11 +2914,11 @@ $('#btnControls').onclick=()=>openDrawer($('#controls').hidden?'controls':null);
 $('#btnSettings').onclick=()=>openDrawer($('#settings').hidden?'settings':null);
 $('#btnShots').onclick=()=>{openDrawer(null);goHome();};
 $('#btnFull').onclick=()=>{try{const p=document.fullscreenElement?document.exitFullscreen():app.requestFullscreen();if(p&&p.catch)p.catch(()=>toast('Full screen is not available here.'));}catch(e){toast('Full screen is not available here.');}};
-$('#btnSwap').onclick=()=>{S.swapPref=!S.swap;applyRoleView();};
-$('#fpvSlot').addEventListener('click',e=>{if(app.classList.contains('rcplus')&&!e.target.closest('button')){S.swapPref=!S.swap;applyRoleView();}});
+$('#btnSwap').onclick=()=>{if(fpvActive())S.qSwap=!S.qSwap;else S.swapPref=!S.swap;applyRoleView();};
+$('#fpvSlot').addEventListener('click',e=>{if(app.classList.contains('rcplus')&&!e.target.closest('button')){if(fpvActive())S.qSwap=!S.qSwap;else S.swapPref=!S.swap;applyRoleView();}});
 $('#btnPanel').onclick=togglePanel;
 document.querySelectorAll('.role').forEach(b=>b.onclick=()=>{S.role=b.dataset.role;store.set('role',S.role);renderHome();applyRoleView();});
-$('#home').addEventListener('click',e=>{const c=e.target.closest('.shot');if(!c)return;const id=c.dataset.shot;if(id==='sandbox')startSandbox();else{const sh=shotById(id);if(sh)openBrief(sh);}});
+$('#home').addEventListener('click',e=>{const c=e.target.closest('.shot');if(!c)return;const id=c.dataset.shot;if(id==='sandbox')startSandbox();else if(id==='fpv')startFpv();else{const sh=shotById(id);if(sh)openBrief(sh);}});
 $('#bStart').onclick=roll;$('#bBack').onclick=goHome;
 $('#bLens').onchange=e=>{setLens(e.target.value);placeCameras();aimAngles(S.shot.frame.tx,S.shot.frame.ty,_aim);gim.pan=_aim.pan;gim.tilt=_aim.tilt;};
 $('#bDelete').onclick=()=>{const sh=S.shot;if($('#bDelete').dataset.armed!=='1'){$('#bDelete').dataset.armed='1';$('#bDelete').textContent='Tap again to delete';return;}
@@ -2615,7 +2927,7 @@ $('#rRetry').onclick=roll;$('#rShots').onclick=goHome;
 $('#rNext').onclick=()=>{const all=allShots(),i=all.indexOf(S.shot);if(i>=0&&i<all.length-1)openBrief(all[i+1]);};
 $('#rCopy').onclick=()=>copyText($('#rText').value,$('#rText'));
 $('#pResume').onclick=resume;
-$('#pRestart').onclick=()=>{if(S.pausedFrom==='sandbox'){startSandbox();return;}S.mode='paused';roll();};
+$('#pRestart').onclick=()=>{if(S.pausedFrom==='fpv'){S.mode='fpv';showOverlay(null);fpvRespawn();return;}if(S.pausedFrom==='sandbox'){startSandbox();return;}S.mode='paused';roll();};
 $('#pQuit').onclick=goHome;
 $('#sSave').onclick=saveRecordedShot;$('#sDiscard').onclick=()=>{showOverlay(null);S.mode='sandbox';toast('Move discarded.');};
 $('#btnExportAll').onclick=()=>{if(!myShots.length){toast('Record a move in the sandbox first.');return;}
@@ -2628,6 +2940,20 @@ $('#carSpeed').oninput=e=>{S.sandSpeed=+e.target.value;$('#carSpeedVal').textCon
 $('#btnCarStop').onclick=()=>{S.carStopped=!S.carStopped;$('#btnCarStop').textContent=S.carStopped?'Start car':'Stop car';};
 $('#btnRec').onclick=()=>rec.on?stopRecord(true):startRecord();
 $('#btnMark').onclick=()=>goToMark(S.markAt==null?0:S.markAt+1);
+// FPV panel
+const qSet=(k,v)=>{settings.fpvq[k]=v;saveSettings();renderFpvTools();};
+$('#qSrc').onchange=e=>qSet('src',e.target.value);
+$('#qMode').addEventListener('click',e=>{const b=e.target.closest('[data-qm]');if(b)qSet('mode',b.dataset.qm);});
+$('#qRateType').onchange=e=>qSet('rateType',e.target.value);
+$('#qRates').addEventListener('change',e=>{const k=e.target.dataset.qr;if(!k)return;const [ax,i]=k.split(':'),s=settings.fpvq,v=parseFloat(e.target.value);
+  if(isFinite(v))s[s.rateType==='betaflight'?'bfRates':'rates'][ax][+i]=clamp(v,0,+e.target.max);saveSettings();renderFpvTools();});
+$('#qTilt').oninput=e=>qSet('uptilt',+e.target.value);$('#qLens').onchange=e=>qSet('lens',e.target.value);
+$('#qMass').oninput=e=>qSet('mass',+e.target.value);$('#qTw').oninput=e=>qSet('tw',+e.target.value);
+$('#qCar').oninput=e=>{S.sandSpeed=+e.target.value;$('#carSpeed').value=S.sandSpeed;$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);renderFpvTools();};
+$('#qCarStop').onclick=()=>{S.carStopped=!S.carStopped;$('#btnCarStop').textContent=S.carStopped?'Start car':'Stop car';renderFpvTools();};
+$('#qMark').onclick=()=>fpvSpawnMark(S.markAt==null?0:S.markAt+1);
+$('#qReset').onclick=()=>fpvRespawn();$('#qCalBtn').onclick=qcalStart;$('#qCalSkip').onclick=()=>{if(qcal.active)qcalNext();};$('#qCalCancel').onclick=qcalCancel;
+window.addEventListener('gamepadconnected',()=>{if(fpvActive()){qBarsN=-1;renderFpvTools();}});
 $('#sbLens').innerHTML=LENSES.map((l,i)=>'<option value="'+l.id+'">'+(i+1)+' · '+l.label+'</option>').join('');
 $('#sbLens').onchange=e=>setLens(e.target.value);
 $('#seatPilot').onchange=e=>{bind.pilot=e.target.value||null;saveBind();pollInput(0);renderControls();};
@@ -2658,9 +2984,14 @@ window.addEventListener('keydown',e=>{
   if((e.code==='Space'||e.code==='Enter')&&e.target.tagName!=='BUTTON')confirmAction();
   else if(e.code==='Escape'||e.code==='KeyP'){
     if(!$('#controls').hidden||!$('#settings').hidden){$('#controls').hidden=$('#settings').hidden=true;cancelCalib();}
-    else if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox')pause();else if(S.mode==='paused')resume();else if(S.mode==='brief'||S.mode==='results')goHome();}
-  else if(e.code==='KeyV'){S.swapPref=!S.swap;applyRoleView();}
+    else if(S.mode==='run'||S.mode==='count'||S.mode==='sandbox'||S.mode==='fpv')pause();else if(S.mode==='paused')resume();else if(S.mode==='brief'||S.mode==='results')goHome();}
+  else if(e.code==='KeyV'){if(fpvActive())S.qSwap=!S.qSwap;else S.swapPref=!S.swap;applyRoleView();}
   else if(e.code==='KeyT')togglePanel();
+  else if(S.mode==='fpv'){
+    if(e.code==='KeyR')fpvRespawn();
+    else if(e.code==='KeyN')fpvSpawnMark(S.markAt==null?0:S.markAt+1);
+    else if(e.code==='BracketLeft'||e.code==='BracketRight'){S.sandSpeed=clamp(S.sandSpeed+(e.code==='BracketRight'?1:-1),0,25);$('#carSpeed').value=S.sandSpeed;$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);renderFpvTools();}
+  }
   else if(e.code==='KeyZ'){if(seats().pilotHuman&&S.mode!=='home')cruiseToggle();}
   else if(e.code==='KeyC')setGimbalProfile(settings.gimbalProfile+1,true);
   else if(e.code==='KeyF'){const ids=FLIGHT_MODES.map(m=>m.id);setFlightMode(ids[(ids.indexOf(settings.flightMode)+1)%ids.length],true);}
@@ -2674,7 +3005,7 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>keys.clear());
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&(S.mode==='run'||S.mode==='count'||S.mode==='sandbox'))pause();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(S.mode==='run'||S.mode==='count'||S.mode==='sandbox'||S.mode==='fpv'))pause();});
 window.addEventListener('gamepadconnected',()=>{pollInput(0);renderPadStatus();if(!$('#controls').hidden)renderControls();});
 window.addEventListener('gamepaddisconnected',()=>{pollInput(0);renderPadStatus();if(!$('#controls').hidden)renderControls();});
 setInterval(()=>{if(S.mode==='home')renderPadStatus();liveAxes();},250);
@@ -2813,6 +3144,40 @@ function stShot(id,o){
 }
 function hist(a,edges){const c=new Array(edges.length-1).fill(0);for(const v of a){for(let i=0;i<c.length;i++)if(v>=edges[i]&&v<edges[i+1]){c[i]++;break;}}return{edges,counts:c};}
 
+// FPV quad checks (VALIDATION §10): rate curves against Betaflight's formulas written out separately here, hover throttle, rate response,
+// top speed, free fall, landing against crashing, and prop wash. Physics-only runs switch collisions off (qd.noCollide).
+function fpvSelfTest(){
+  const keepQ=clone(settings.fpvq),keepW=clone(settings.wind),keepMode=S.mode,z0={thr:0,yaw:0,pitch:0,roll:0,arm:null};
+  settings.fpvq=clone(DEFAULTS.fpvq);settings.wind={speed:0,dir:270,gust:'off'};windRng=rng(11);wind.gx=wind.gz=0;
+  let site=null;   // open ground: no tree within 10 m, no building, 40 m from the car
+  for(let r=60;r<=600&&!site;r+=60)for(let a=0;a<360&&!site;a+=30){const x=world.TC.x+Math.sin(a*DEG)*r,z=world.TC.z+Math.cos(a*DEG)*r;let ok=Math.hypot(x-car.x,z-car.z)>40;
+    treesNear(x,z,t=>{if(Math.hypot(t.x-x,t.z-z)<t.r+10)ok=false;});if(ok&&bldgs.length&&buildingTop(x,z,10)>-Infinity)ok=false;if(ok)site={x,z};}
+  site=site||{x:0,z:0};
+  const put=o=>{const x=site.x,z=site.z;qd.pos.set(x,terrainH(x,z)+(o.agl==null?150:o.agl),z);qd.vel.set(0,o.vy||0,0);qd.w.set(0,0,0);qd.bw.set(0,0,0);
+    qd.q.setFromEuler(_qe.set((o.pitch||0)*DEG,0,0,'YXZ'));qd.motor=o.motor==null?FPVQ.idle:o.motor;qd.wash=0;qd.crashT=0;qd.crashes=0;qd.onGround=false;qd.armed=true;qd.armBlock=false;
+    qd.noCollide=!!o.noCollide;qd.spawn={x,z,yaw:0};drone.pos.copy(qd.pos);windStep(0);};
+  const run=(dur,inp,on)=>{const h=1/FPVQ.hz,n=Math.round(dur/h);for(let i=1;i<=n;i++){drone.pos.copy(qd.pos);windStep(h);fpvStep(h,inp(i*h));if(on)on(i*h);}};
+  const Q={site:{x:r1(site.x),z:r1(site.z)},mass:settings.fpvq.mass,tw:settings.fpvq.tw};
+  Q.rates=[0,.25,.5,.75,1].map(x=>({stick:x,sim:r2(fpvRate('roll',x)),ref:r2(x*70+600*Math.abs(x)*x)}));   // Actual 70 / 670 / 0
+  settings.fpvq.rates.roll=[70,670,.5];Q.rateExpo={stick:.5,expo:.5,sim:r2(fpvRate('roll',.5)),ref:r2(.5*70+600*.5*(.5**5*.5+.5*.5))};settings.fpvq.rates.roll=[70,670,0];
+  settings.fpvq.rateType='betaflight';Q.ratesBf=[.5,1].map(x=>({stick:x,sim:r2(fpvRate('roll',x)),ref:r2(200*x/(1-.7*x))}));settings.fpvq.rateType='actual';   // RC 1.0, super 0.7
+  const th0=()=>FPVQ.idle+(1-FPVQ.idle)*fpvHover();
+  put({agl:120,noCollide:true});const th=fpvHover();qd.motor=th0();let mv=0;run(4,()=>({...z0,thr:th}),t=>{if(t>3)mv=Math.max(mv,Math.abs(qd.vel.y));});
+  Q.hover={throttle:r2(th),rhoRatio:r2(airRho),maxVertSpeed3to4s:r2(mv)};
+  put({agl:120,noCollide:true});qd.motor=th0();let t90=null,wmax=0;
+  run(.5,()=>({...z0,thr:th,roll:1}),t=>{const w=-qd.w.z/DEG;wmax=Math.max(wmax,w);if(t90==null&&w>=.9*fpvRate('roll',1))t90=t;});
+  Q.rollStep={setpoint:r1(fpvRate('roll',1)),t90:t90==null?null:+t90.toFixed(3),peak:r1(wmax)};
+  Q.topSpeed=[45,55,65,75].map(tilt=>{put({agl:400,pitch:-tilt,motor:1,noCollide:true});run(20,()=>({...z0,thr:1}));return{tiltDeg:tilt,horizontal:r1(Math.hypot(qd.vel.x,qd.vel.z)),vertical:r1(qd.vel.y)};});
+  put({agl:1500,noCollide:true});run(15,()=>z0);Q.freeFall={vertical:r1(qd.vel.y)};
+  put({agl:.5,vy:-1.5});run(1.5,()=>z0);Q.softLanding={crashed:qd.crashes>0,onGround:qd.onGround};
+  put({agl:4,vy:-7});run(1,()=>z0);Q.hardHit={crashed:qd.crashes>0,why:qd.crashWhy};
+  Q.propWash=[{name:'Vertical descent, 28% throttle',pitch:0},{name:'Forward flight, 25 deg tilt, 28% throttle',pitch:-25}].map(c=>{
+    put({agl:600,pitch:c.pitch,motor:.3,noCollide:true});let n=0,sw=0,mx=0,s2=0,sv=0;
+    run(8,()=>({...z0,thr:.28}),t=>{if(t<4)return;n++;sw+=qd.wash;mx=Math.max(mx,qd.wash);s2+=qd.w.x**2+qd.w.z**2;sv+=qd.vel.y;});
+    return{case:c.name,vh:r2(fpvVh()),meanWash:r2(sw/n),maxWash:r2(mx),rateRmsDeg:r1(Math.sqrt(s2/n)/DEG),vertical:r2(sv/n),horizontal:r1(Math.hypot(qd.vel.x,qd.vel.z))};});
+  qd.noCollide=false;settings.fpvq=keepQ;settings.wind=keepW;windRng=Math.random;S.mode=keepMode;
+  return Q;
+}
 async function runSelfTests(){
   stBusy=true;const keep=clone(settings),keepRole=S.role,R={started:new Date().toISOString(),ua:navigator.userAgent,tests:{}},T=R.tests;
   const box=document.createElement('section');box.className='overlay dim';box.id='stBox';box.style.zIndex='40';
@@ -2923,6 +3288,7 @@ async function runSelfTests(){
   // AI pilot imperfection: what each level does to the aircraft motion the camera op sees
   T.aiImperfection=[];for(const lvl of ['off','low','high']){settings.aiImperfect=lvl;const r=stShot('side',{v2:true,seat:'camera'});T.aiImperfection.push({level:lvl,devMean:r.devMean,jerkP50:r.jerkP50,jerkP95:r.jerkP95,score:r.score});await tick();}
   settings.aiImperfect=keep.aiImperfect||'low';
+  say('FPV quad');T.fpv=fpvSelfTest();await tick();
   // H8 and full shots: every built-in shot, both seats, v1 and v2, calm air; plus gusts on the Side Track
   say('Shots');T.shots=[];
   for(const sh of BUILTIN)for(const seat of ['camera','pilot'])for(const v of V){T.shots.push(stShot(sh.id,{v2:v===2,seat}));say('Shots: '+sh.name+' · '+seat+' · v'+v);await tick();}
@@ -2944,7 +3310,7 @@ renderSettings();
 buildWorld(null);car.v=15;setLens('35');resetDroneBehindCar();
 loadUserMaps().then(()=>{const id=store.get('map','valley');if(id&&id!=='valley'&&!SELFTEST)useLocation(id);});
 if(DEV)devUI();
-if(DEV||SELFTEST)window.__dual={PHYS2,SPEC,FLIGHT_PROFILES,settings,AI_IMP,runSelfTests,stShot,stReset,stRun,stDeriv,stZero,drone,att,fish,camFPV,renderer,scene,render,viewFisheye,camMain,gim,S,placeCameras,setLens,get world(){return world},get detail(){return detail},get bldgs(){return bldgs},terrainH:(x,z)=>terrainH(x,z),useLocation};
+if(DEV||SELFTEST)window.__dual={update,hud,fpvSelfTest,fpvUpdate,fpvPlace,FPVQ,qd,qin,fpvStep,fpvRate,fpvHover,fpvVh,startFpv,fpvRespawn,fpvSpawnMark,camQ,camChase,get lastDevs(){return lastDevs},PHYS2,SPEC,FLIGHT_PROFILES,settings,AI_IMP,runSelfTests,stShot,stReset,stRun,stDeriv,stZero,drone,att,fish,camFPV,renderer,scene,render,viewFisheye,camMain,gim,S,placeCameras,setLens,get world(){return world},get detail(){return detail},get bldgs(){return bldgs},terrainH:(x,z)=>terrainH(x,z),useLocation};
 if(SELFTEST)setTimeout(runSelfTests,800);
 S.mode='home';renderHome();applyRoleView();
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);

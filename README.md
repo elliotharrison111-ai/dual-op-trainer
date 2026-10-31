@@ -24,6 +24,16 @@ Settings → Physics → **Physics v2 (beta)** turns on the newer flight model, 
 
 It is off by default, and best scores are kept separately for v1 and v2. Wind with gusts, A (ATTI) mode and Cruise Control work in both.
 
+## FPV mode
+
+The **FPV Free Fly** card flies a 5-inch Betaflight quad, in Acro or Angle mode, on any location while the car drives its route.
+
+1. **Connect a controller.** Plug an FPV radio in over USB and choose USB Joystick on the radio; the TBS Tango 2 and other EdgeTX or OpenTX radios work this way. A gamepad or the keyboard works too.
+2. **Run Radio setup** in the FPV panel. It finds your channels and your arm switch.
+3. **Enter your quad's numbers** in the same panel: the rates from Betaflight's Rates tab, the weight, the thrust to weight and the camera uptilt.
+
+The rate maths and defaults are Betaflight's own. The airframe numbers are estimates until you set them to your quad.
+
 ## Locations
 
 | Location | What it is |
