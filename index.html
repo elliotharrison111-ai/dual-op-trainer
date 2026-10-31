@@ -292,6 +292,7 @@ code{font:500 12.5px/1.4 var(--font-data);background:var(--ink);border:1px solid
         <label class="field" for="carSpeed"><span>Car speed <b id="carSpeedVal"></b></span><input type="range" id="carSpeed" min="0" max="25" step="0.5" value="16"></label>
         <label class="field" for="sbLens"><span>Lens</span><select id="sbLens"></select></label>
         <div class="row"><button class="btn small" id="btnCarStop" type="button">Stop car</button><button class="btn small" id="btnRec" type="button">Record move</button></div>
+        <div class="row"><button class="btn small" id="btnMark" type="button" hidden>Go to pin</button></div>
         <p class="hint" id="recHint">Fly a move with the car rolling, then save it as a shot for your camera op.</p>
       </div>
     </div>
@@ -603,6 +604,22 @@ const PHYS2={
   vJerk:20,                                 // m/s^3 vertical jerk cap [ESTIMATED]
   inputTau:.02                              // s stick reconstruction filter, about one 20 ms DJI stick poll [ESTIMATED]
 };
+// Prop wash / vortex ring state (Physics v2 only). The idea comes from Uncrashed's Physics 3.0 (developer video, 20 Oct 2026): keep a memory
+// of the air the rotors pushed down, so a slow vertical descent sinks into its own wash. Their model isn't published. This one is momentum
+// theory on published Inspire 3 numbers, plus published vortex-ring boundaries, with estimated strengths (docs/research/uncrashed-physics3.md).
+const WASH={
+  mass:3.995,                // kg, with camera, lens, two batteries, PROSSD and propellers [SPEC, UM v3.0 p.128]
+  propD:.406,                // m, DJI 1671 propeller, 40.6 cm [SPEC, UM v3.0 p.128 and accessories table]
+  props:4,
+  onset:.5,peak:1.2,clear:2, // descent rate over hover induced velocity v_h: wash starts, peaks, clears [ESTIMATED from multirotor VRS tests:
+                             // onset about 0.5 v_h, peak loss 1.2-1.3 v_h; above about 2 v_h air flows up through the rotors cleanly]
+  muClear:.6,                // horizontal airspeed over v_h that carries the aircraft out of its wash (1/e) [ESTIMATED]
+  tau:.6,                    // s for the wash to build or clear: the memory of displaced air [ESTIMATED]
+  sink:1.2,                  // m/s^2 mean thrust loss in full wash, which the height controller then fights [ESTIMATED]
+  buffet:2.5,                // deg rms pitch/roll buffeting in full wash [ESTIMATED]
+  buffetTau:.12,             // s buffeting correlation time [ESTIMATED]
+  vib:3                      // X9 residual vibration grows by this factor x wash [ESTIMATED]
+};
 const LENSES=[
   {id:'18',label:'DL 18mm F2.8 ASPH',f:18},
   {id:'24',label:'DL 24mm F2.8 LS ASPH',f:24},
@@ -667,7 +684,7 @@ const VALLEY_ROAD=[[0,0],[260,-60],[520,-10],[690,150],[660,360],[500,440],[360,
 let ROAD_N=1,ROAD_LEN=1,DS=1,roadDraw=1,nearIdx=0,ROAD_TURNS=[];   // turnarounds (s, metres) on out-and-back routes
 let RX=new Float32Array(1),RZ=new Float32Array(1),RY=new Float32Array(1),RH=new Float32Array(1),RK=new Float32Array(1),VLIM=new Float32Array(1);
 let rgrid=new Map(),trees=[],tgrid=new Map(),grid=null;
-let world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};
+let world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:'',marks:[]};
 const ridx=s=>((Math.floor(s/DS)%ROAD_N)+ROAD_N)%ROAD_N;
 const wrapS=s=>((s%ROAD_LEN)+ROAD_LEN)%ROAD_LEN;
 const _rs={x:0,y:0,z:0,yaw:0,grade:0};
@@ -748,6 +765,15 @@ function grassTexture(repeatX,repeatZ){
   x2.putImageData(img,0,0);
   for(let k=0;k<260;k++){x2.fillStyle=r()<.6?'rgba(40,40,30,.10)':'rgba(255,255,240,.10)';x2.beginPath();x2.ellipse(r()*256,r()*256,4+r()*18,3+r()*10,r()*3,0,TAU);x2.fill();}
   const tex=new THREE.CanvasTexture(cv);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(repeatX,repeatZ);tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return tex;
+}
+// Labelled pins for named spots in a map pack (an arch, a trailhead). A pack marks approximate positions in each pin's note.
+function buildMarks(list){
+  for(const m of list){const y=terrainH(m.x,m.z),mat=new THREE.MeshBasicMaterial({color:0xff8a1f});
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,24,6),mat);pole.position.set(m.x,y+12,m.z);worldGroup.add(pole);
+    const cv=document.createElement('canvas'),g=cv.getContext('2d');cv.width=512;cv.height=96;g.font='600 40px system-ui,sans-serif';
+    const w=Math.min(504,g.measureText(m.name).width+40);g.fillStyle='rgba(16,23,26,.82)';g.fillRect((512-w)/2,8,w,80);g.fillStyle='#ff8a1f';g.fillRect((512-w)/2,8,6,80);
+    g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.fillText(m.name,259,50);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthWrite:false}));sp.scale.set(30,5.6,1);sp.position.set(m.x,y+27,m.z);worldGroup.add(sp);}
 }
 function disposeWorld(){
   for(const o of worldGroup.children.slice()){worldGroup.remove(o);o.traverse(m=>{if(m.geometry)m.geometry.dispose();
@@ -916,13 +942,13 @@ async function buildWorld(def){
   if(token!==worldToken)return false;
   disposeWorld();const R=rng(7);
   if(!def){
-    world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:''};grid=null;terrainH=valleyH;detail=null;bldgs=[];bgrid=new Map();
+    world={id:'valley',name:'Practice valley',base:null,TC:{x:130,z:400},hx:1300,hz:1300,credits:'',marks:[]};grid=null;terrainH=valleyH;detail=null;bldgs=[];bgrid=new Map();
     buildRoad(VALLEY_ROAD,true,()=>0);buildValleyMesh();buildRoadMeshes();buildTrees(R,null);buildRanges(R);
     scene.fog.near=380;scene.fog.far=2700;setFar(6000);
   }else{
     const nx=def.nx,nz=def.nz,raw=decodeHeights(def.h,nx*nz);
     const G={nx,nz,x0:-def.sizeX/2,z0:-def.sizeZ/2,cx:def.sizeX/(nx-1),cz:def.sizeZ/(nz-1),h:raw};
-    world={id:def.id,name:def.name,base:def.base,TC:{x:0,z:0},hx:def.sizeX/2,hz:def.sizeZ/2,credits:def.credits||'',lat:def.lat,lon:def.lon,attribution:def.attribution||[]};
+    world={id:def.id,name:def.name,base:def.base,TC:{x:0,z:0},hx:def.sizeX/2,hz:def.sizeZ/2,credits:def.credits||'',lat:def.lat,lon:def.lon,attribution:def.attribution||[],marks:(def.marks||[]).filter(m=>isFinite(m.x)&&isFinite(m.z))};
     grid=G;terrainH=(x,z)=>gridAt(G,x,z);
     buildRoad(def.route,!!def.closed,terrainH);
     // Cut a bench for the road: flat at road height under it, blending back to the real ground over a few cells
@@ -941,7 +967,7 @@ async function buildWorld(def){
     buildGridMesh(grid,img,hole);
     if(detail){let dimg=null;if(def.detail.imagery)try{dimg=await imageToCanvas(def.detail.imagery);}catch(e){}if(token!==worldToken)return false;buildDetailMesh(detail,dimg);}
     if(def.water&&def.water.length)buildWater(def.water);
-    buildBuildings(def.buildings);
+    buildBuildings(def.buildings);buildMarks(world.marks);
     buildRoadMeshes();buildTrees(R,img);
     const span=Math.max(def.sizeX,def.sizeZ);scene.fog.near=700;scene.fog.far=Math.max(3500,span*.8);setFar(Math.max(9000,span*1.6));
   }
@@ -1123,7 +1149,7 @@ let airRho=1;
 function rhoRatio(altM){const T=15.04-.00649*altM,p=101.29*Math.pow((T+273.1)/288.08,5.256);return p/(.2869*(T+273.1))/1.225;}   // NASA Glenn Earth Atmosphere Model, troposphere, standard day [DERIVED]
 function dragAcc(vx,vz){const ax=vx-wind.x,az=vz-wind.z,k=Math.hypot(ax,az)*SPEC.dragK*(phys2()?airRho:1);_drag.x=-ax*k;_drag.z=-az*k;return _drag;}
 // The flight controller has already settled against the current wind (start of a take, reset)
-function settleFlight(){const d=dragAcc(drone.vel.x,drone.vel.z);drone.ff.x=-d.x;drone.ff.z=-d.z;drone.cmd.x=drone.cmd.z=0;drone.thrust.x=drone.ff.x;drone.thrust.z=drone.ff.z;drone.hold=null;
+function settleFlight(){wash.I=wash.bx=wash.bz=0;const d=dragAcc(drone.vel.x,drone.vel.z);drone.ff.x=-d.x;drone.ff.z=-d.z;drone.cmd.x=drone.cmd.z=0;drone.thrust.x=drone.ff.x;drone.thrust.z=drone.ff.z;drone.hold=null;
   const tm=Math.hypot(drone.ff.x,drone.ff.z),ang=Math.atan(tm/GRAV);att.x=tm>1e-9?drone.ff.x/tm*ang:0;att.z=tm>1e-9?drone.ff.z/tm*ang:0;attW.x=attW.z=0;drone.yawAcc=0;drone.acc.y=0;}
 const compass=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(((d%360)+360)%360/45)%8];
 const gim={pan:0,tilt:0,panRate:0,tiltRate:0,prevW:0,prevT:0,rel:0};
@@ -1229,10 +1255,23 @@ function droneVisual(dt){
 // acceleration caps reconciled with g·tan(tilt limit); yaw and vertical are acceleration- and jerk-limited; drag scales
 // with air density; the AI pilot flies this same model through virtual sticks.
 const phys2=()=>!!settings.physicsV2;
-const att={x:0,z:0},attW={x:0,z:0};   // tilt vector (rad; points where the thrust pushes, world horizontal) and its rate
+const att={x:0,z:0},attW={x:0,z:0},wash={I:0,bx:0,bz:0};   // tilt vector (rad; points where the thrust pushes, world horizontal) and its rate
 const vtr={v:0,a:0},ytr={v:0,a:0};
 // Track a target rate with a first-order demand capped at aMax, reached with at most jMax jerk
 function jlTrack(st,target,tau,aMax,jMax,dt){const ad=clamp((target-st.v)/tau,-aMax,aMax);st.a+=clamp(ad-st.a,-jMax*dt,jMax*dt);st.v+=st.a*dt;}
+// Hover induced velocity from momentum theory, v_h = sqrt(W / (2 rho A)) [DERIVED]: about 5.6 m/s at sea level, 5.9 m/s at Moab
+function hoverInduced(){const A=WASH.props*Math.PI*(WASH.propD/2)**2;return Math.sqrt(WASH.mass*GRAV/(2*1.225*airRho*A));}
+// How deep the aircraft sits in its own wash (0..1). It uses airspeed, so wind blows the wash away just as flying sideways out of it does.
+// The level builds and clears over WASH.tau; the buffeting kicks the attitude, and the attitude controller fights it.
+function washStep(dt){
+  const vh=hoverInduced(),r=Math.max(0,-drone.vel.y)/vh,mu=Math.hypot(drone.vel.x-wind.x,drone.vel.z-wind.z)/vh;
+  const ss=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+  const bell=r<=WASH.peak?ss(WASH.onset,WASH.peak,r):1-ss(WASH.peak,WASH.clear,r);
+  wash.I+=(bell*Math.exp(-((mu/WASH.muClear)**2))-wash.I)*(1-Math.exp(-dt/WASH.tau));if(wash.I<1e-4){wash.I=0;return;}
+  const sg=WASH.buffet*DEG*wash.I,k=Math.sqrt(2*dt/WASH.buffetTau),bx=wash.bx,bz=wash.bz;
+  wash.bx+=-wash.bx/WASH.buffetTau*dt+sg*k*randn();wash.bz+=-wash.bz/WASH.buffetTau*dt+sg*k*randn();
+  att.x+=wash.bx-bx;att.z+=wash.bz-bz;
+}
 function attitudeStep(dt,fm,phx,phz){
   const wMax=PHYS2.attRate[fm]*DEG,aMax=PHYS2.attAcc[fm]*DEG,tau=PHYS2.attTau[fm],tMax=SPEC.tiltLim[fm]*DEG;
   let l=Math.hypot(phx,phz);if(l>tMax){phx*=tMax/l;phz*=tMax/l;}
@@ -1267,10 +1306,10 @@ function pilotStep2(dt,inp,fm){
     // The attitude the controller asks for; the airframe gets there at its own rate (attitudeStep), so tilt leads acceleration
     const tl=Math.hypot(tx,tz),ang=Math.atan(tl/GRAV);if(tl>1e-9){phx=tx/tl*ang;phz=tz/tl*ang;}
   }
-  attitudeStep(dt,fm,phx,phz);
+  washStep(dt);attitudeStep(dt,fm,phx,phz);
   drone.acc.x=drone.thrust.x+d.x;drone.acc.z=drone.thrust.z+d.z;
   drone.vel.x+=drone.acc.x*dt;drone.vel.z+=drone.acc.z*dt;
-  vtr.v=drone.vel.y;vtr.a=drone.acc.y;jlTrack(vtr,tvy,.35,PHYS2.vAcc[fm],PHYS2.vJerk,dt);drone.vel.y=vtr.v;drone.acc.y=vtr.a;drone.dbg.tvy=tvy;
+  vtr.v=drone.vel.y;vtr.a=drone.acc.y;jlTrack(vtr,tvy,.35,PHYS2.vAcc[fm],PHYS2.vJerk,dt);drone.vel.y=vtr.v-WASH.sink*wash.I*dt;drone.acc.y=vtr.a;drone.dbg.tvy=tvy;
   const tyr=-ex(inp.yaw)*Math.min(fp.yaw,SPEC.yawMax.S)*DEG;ytr.v=drone.yawRate;ytr.a=drone.yawAcc;
   jlTrack(ytr,tyr,.18,PHYS2.yawAcc[fm]*DEG,PHYS2.yawJerk*DEG,dt);drone.yawRate=ytr.v;drone.yawAcc=ytr.a;
   drone.yaw=wrapPi(drone.yaw+drone.yawRate*dt);
@@ -1362,7 +1401,7 @@ function gimTilt(){return !settings.gimbalExt?{min:SPEC.tiltMin,max:SPEC.tiltMax
 const gimCaps=()=>settings.gimbalCtl==='wheels'?{pan:432,tilt:432}:{pan:270,tilt:120};
 // Residual angular vibration of the stabilised X9 [SPEC: +/-0.002 deg hovering, +/-0.004 deg flying, UM p.129]; v2 only. Slow noise, sigma = band/4 per axis [ESTIMATED shape]
 const vib={p:0,t:0,r:0};
-function vibStep(dt){const b=(Math.hypot(drone.vel.x,drone.vel.z)>.5?.004:.002)/4*DEG,k=Math.sqrt(2*dt/.05);for(const a of ['p','t','r'])vib[a]+=-vib[a]/.05*dt+b*k*randn();}
+function vibStep(dt){const b=(Math.hypot(drone.vel.x,drone.vel.z)>.5?.004:.002)/4*DEG*(1+WASH.vib*wash.I),k=Math.sqrt(2*dt/.05);for(const a of ['p','t','r'])vib[a]+=-vib[a]/.05*dt+b*k*randn();}
 function autoCamStep(dt){
   camMain.position.copy(drone.pos).y-=.4;
   const f=S.shot.frame;aimAngles(f.tx,f.ty,_aim);
@@ -1765,12 +1804,25 @@ function finish(){
   if(!S.crash&&!stBusy){const best=store.get(bestKey(),{}),k=S.shot.id+':'+S.role;if(!(best[k]>=S.result.score)){best[k]=S.result.score;store.set(bestKey(),best);S.result.pb=true;}}
   renderResults();showOverlay('results');$('#rRetry').focus();
 }
-function crash(why){if(S.mode==='sandbox'){toast('Crashed: '+why+'. Resetting behind the car.');resetDroneBehindCar();return;}S.crash=why;finish();}
+function crash(why){if(S.mode==='sandbox'){if(S.markAt!=null&&world.marks[S.markAt]){toast('Crashed: '+why+'. Resetting at the pin.');goToMark(S.markAt,true);}else{toast('Crashed: '+why+'. Resetting behind the car.');resetDroneBehindCar();}return;}S.crash=why;finish();}
+// Sandbox: hover off a map pack's pin, facing it (N or the panel button cycles the pins). Picks the most open of eight bearings so the
+// aircraft doesn't start inside a cliff; a crash then resets here instead of behind the car.
+function goToMark(i,quiet){
+  const M=world.marks||[];if(!M.length||S.mode!=='sandbox')return;
+  if(!seats().pilotHuman){toast('Pins need a human pilot. Switch to the Pilot or Dual seat.');return;}
+  S.markAt=((i%M.length)+M.length)%M.length;const m=M[S.markAt],gy=terrainH(m.x,m.z);let best=null;
+  for(let b=0;b<360;b+=45){const sx=Math.sin(b*DEG),sz=-Math.cos(b*DEG);let top=gy;for(let d=10;d<=70;d+=5)top=Math.max(top,terrainH(m.x+sx*d,m.z+sz*d));if(!best||top<best.top)best={top,sx,sz};}
+  const x=m.x+best.sx*70,z=m.z+best.sz*70;drone.pos.set(x,Math.max(best.top+20,gy+30),z);drone.vel.set(0,0,0);
+  drone.yaw=Math.atan2(-(m.x-x),-(m.z-z));drone.yawRate=0;drone.visPitch=drone.visRoll=0;settleFlight();placeCameras();
+  const dx=m.x-camMain.position.x,dy=gy+8-camMain.position.y,dz=m.z-camMain.position.z;gim.pan=Math.atan2(-dx,-dz);gim.tilt=Math.atan2(dy,Math.hypot(dx,dz));gim.panRate=gim.tiltRate=0;resetRel();
+  renderMarkBtn();if(!quiet)toast(m.name+(m.note?'. '+m.note:''),7000);
+}
+function renderMarkBtn(){const M=world.marks||[],b=$('#btnMark');if(!b)return;b.hidden=!M.length;if(M.length)b.textContent='Go to '+M[((S.markAt==null?-1:S.markAt)+1)%M.length].name;}
 function pause(){if(S.mode==='paused')return;S.pausedFrom=S.mode;S.mode='paused';showOverlay('pause');$('#pResume').focus();}
 function resume(){if(S.mode!=='paused')return;S.mode=S.pausedFrom==='count'?'count':S.pausedFrom;showOverlay(null);}
 // Put back the flight mode and wind a drill borrowed
 function drillRestore(){if(S.drillPrev){settings.flightMode=S.drillPrev.mode;settings.wind=S.drillPrev.wind;S.drillPrev=null;}S.drill=null;drillGroup.visible=false;}
-function goHome(){stopRecord(false);drillRestore();S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
+function goHome(){stopRecord(false);drillRestore();S.markAt=null;renderMarkBtn();S.mode='home';S.shot=SANDBOX;ghost.visible=false;car.v=15;resetDroneBehindCar();setLens('35');showOverlay('home');renderHome();applyRoleView();}
 function confirmAction(){if(S.mode==='brief'||S.mode==='results')roll();else if(S.mode==='paused')resume();}
 
 /* ---------- Move recording (sandbox) ---------- */
@@ -1921,6 +1973,9 @@ function drawMap(){
   else{g.fillStyle='#1e3326';for(const t of trees){const x=X(t.x),y=Y(t.z);if(x>-4&&x<w+4&&y>-4&&y<h+4){g.beginPath();g.arc(x,y,Math.max(1.2,t.r*k),0,TAU);g.fill();}}}
   g.strokeStyle='#4a5357';g.lineWidth=Math.max(2,ROAD_W*k);g.lineJoin='round';g.beginPath();
   for(let i=0;i<=ROAD_N;i+=3){const j=i%ROAD_N;i?g.lineTo(X(RX[j]),Y(RZ[j])):g.moveTo(X(RX[j]),Y(RZ[j]));}g.closePath();g.stroke();
+  for(const m of world.marks||[]){const x=X(m.x),y=Y(m.z);if(x<-60||x>w+60||y<-20||y>h+20)continue;
+    g.fillStyle='#ff8a1f';g.beginPath();g.moveTo(x,y-5*dpr);g.lineTo(x+4*dpr,y);g.lineTo(x,y+5*dpr);g.lineTo(x-4*dpr,y);g.closePath();g.fill();
+    g.font=(10*dpr)+'px IBM Plex Mono, monospace';g.fillStyle='#f4f1ea';g.fillText(m.name,x+6*dpr,y+3*dpr);}
   if(ghost.visible){g.strokeStyle='#62d08b';g.lineWidth=1.5*dpr;g.beginPath();g.arc(X(P.x),Y(P.z),Math.max(4*dpr,S.shot.tolM*k),0,TAU);g.stroke();}
   // camera wedge
   const hf=hfovOf(S.focal),len=Math.min(span*1.4,400),dx=X(drone.pos.x),dy=Y(drone.pos.z);
@@ -2149,7 +2204,8 @@ function importShots(code){
 // Map files ("map packs") hold a height grid, the car route in local metres, and an aerial photo.
 const BUILTIN_MAPS=[{id:'bigsky',name:'Big Sky',file:'maps/big-sky.json',blurb:'Lone Mountain Trail climbing to Mountain Village, with Lone Mountain above. Montana.'},
   {id:'lavalake',name:'Gallatin Canyon: Lava Lake',file:'maps/lava-lake.json',blurb:'US-191 under Gallatin Tower, Skyline Arête and the Sparerib area, with the Gallatin River. 2 m lidar terrain around the crags.'},
-  {id:'bozeman',name:'Downtown Bozeman',file:'maps/bozeman.json',blurb:'Main Street through downtown, with OpenStreetMap buildings and lidar-measured heights. Buildings collide.'}];
+  {id:'bozeman',name:'Downtown Bozeman',file:'maps/bozeman.json',blurb:'Main Street through downtown, with OpenStreetMap buildings and lidar-measured heights. Buildings collide.'},
+  {id:'poolarch',name:'Moab: Pool Arch Canyon',file:'maps/pool-arch.json',blurb:'Behind the Rocks fins above Pritchett Canyon, with pins for Pool Arch (Rock of Ages), the trailhead and the exit. 2 m lidar terrain over the canyoneering loop; Kane Creek Blvd along the Colorado River for car work. Sandbox: N jumps to a pin.'}];
 const MAP_CREDITS='Elevation: USGS 3DEP. Aerial imagery: USGS National Map. Roads: US Census TIGER/Line.';
 const SITE_URL='https://elliotharrison111-ai.github.io/dual-op-trainer/',SITE_NAME=SITE_URL.replace(/^https:\/\/|\/$/g,'');
 const inViewer=(()=>{try{return window.top!==window.self;}catch(e){return true;}})();
@@ -2176,7 +2232,7 @@ async function useLocation(id){
     const pack=await getPack(id);
     await buildWorld(pack);
     store.set('map',id);world.mini=pack&&pack.imagery?await miniPhoto(pack.imagery):null;
-    car.v=15;resetDroneBehindCar();if(S.mode!=='home')goHome();else renderHome();
+    car.v=15;S.markAt=null;resetDroneBehindCar();if(S.mode!=='home')goHome();else renderHome();renderMarkBtn();
     toast(pack?pack.name+' loaded. Rehearsal only: verify terrain, roads, buildings and airspace on site before flying it.':'Practice valley loaded.',pack?7000:4200);
   }catch(e){toast(e.message||'That map could not be loaded.');}
   mapBusy=false;renderLocations();
@@ -2571,6 +2627,7 @@ $('#btnImportGo').onclick=()=>{try{const n=importShots($('#importText').value);$
 $('#carSpeed').oninput=e=>{S.sandSpeed=+e.target.value;$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);};
 $('#btnCarStop').onclick=()=>{S.carStopped=!S.carStopped;$('#btnCarStop').textContent=S.carStopped?'Start car':'Stop car';};
 $('#btnRec').onclick=()=>rec.on?stopRecord(true):startRecord();
+$('#btnMark').onclick=()=>goToMark(S.markAt==null?0:S.markAt+1);
 $('#sbLens').innerHTML=LENSES.map((l,i)=>'<option value="'+l.id+'">'+(i+1)+' · '+l.label+'</option>').join('');
 $('#sbLens').onchange=e=>setLens(e.target.value);
 $('#seatPilot').onchange=e=>{bind.pilot=e.target.value||null;saveBind();pollInput(0);renderControls();};
@@ -2610,6 +2667,7 @@ window.addEventListener('keydown',e=>{
   else if(e.code==='KeyG'){settings.guides=!settings.guides;saveSettings();renderSettings();}
   else if(S.mode==='sandbox'){
     if(e.code==='KeyM')rec.on?stopRecord(true):startRecord();
+    else if(e.code==='KeyN')goToMark(S.markAt==null?0:S.markAt+1);
     else if(e.code==='BracketLeft'||e.code==='BracketRight'){S.sandSpeed=clamp(S.sandSpeed+(e.code==='BracketRight'?1:-1),0,25);$('#carSpeed').value=S.sandSpeed;$('#carSpeedVal').textContent=fmtSpd(S.sandSpeed);}
     else if(/^Digit[1-6]$/.test(e.code)){const L=LENSES[+e.code.slice(5)-1];if(L){setLens(L.id);$('#sbLens').value=L.id;}}
   }
@@ -2835,6 +2893,13 @@ async function runSelfTests(){
     T.limits.push({mode:m,maxLean:r1(d.pl),tiltLimit:SPEC.tiltLim[m],maxYawRate:r1(d.pyr),yawLimit:FLIGHT_PROFILES[m].yaw,maxVert:r2(d.pvz),ok:d.pl<=SPEC.tiltLim[m]+.1&&d.pyr<=FLIGHT_PROFILES[m].yaw+.5&&d.pvz<=SPEC.vUp+.01});}
   await tick();
   // H9: does airframe motion leak into the X9 picture? Pilot throws the aircraft around with the gimbal sticks centred (Free)
+  say('Prop wash');T.propWash=[];
+  for(const c of [{name:'Hover, sticks centred',v:2,mode:'N',thr:0},{name:'N full descent, calm',v:2,mode:'N',thr:-1},{name:'S full descent, calm',v:2,mode:'S',thr:-1},
+    {name:'T full descent, calm',v:2,mode:'T',thr:-1},{name:'N full descent, full forward',v:2,mode:'N',thr:-1,pitch:1},{name:'N full descent, 10 m/s wind',v:2,mode:'N',thr:-1,wind:10},
+    {name:'N full descent, v1',v:1,mode:'N',thr:-1}]){
+    const o={v2:c.v===2,mode:c.mode,wind:c.wind||0,agl:150,seed:5};stReset(o);let n=0,sI=0,mx=0,s2=0,sv=0,tv=0;
+    stRun(o,8,t=>({...stZero(),thr:c.thr,pitch:c.pitch||0}),(h,t)=>{if(t<4)return;n++;sI+=wash.I;mx=Math.max(mx,wash.I);const l=Math.hypot(att.x,att.z)/DEG;s2+=l*l;sv+=drone.vel.y;tv+=drone.dbg.tvy||0;});
+    T.propWash.push({case:c.name,v:c.v,mode:c.mode,vh:r2(hoverInduced()),meanWash:r2(sI/n),maxWash:r2(mx),leanRmsDeg:r2(Math.sqrt(s2/n)),descent:r2(-sv/n),commanded:r2(-tv/n)});await tick();}
   say('X9 stabilisation');T.x9=[];
   for(const v of V){const o={v2:v===2,mode:'S'};stReset(o);gim.pan=0;gim.tilt=-.2;gim.panRate=gim.tiltRate=0;resetRel();placeCameras();camMain.getWorldDirection(_dir);const d0=_dir.clone();let mx=0;
     stRun(o,8,t=>({thr:0,yaw:Math.sign(Math.sin(t*2)),pitch:Math.sign(Math.sin(t*1.3)),roll:Math.sign(Math.sin(t*1.7)),fpvTilt:0}),(h)=>{const y0=drone.yaw;gimbalStep(h,{pan:0,tilt:0},0);panLimit();placeCameras();camMain.getWorldDirection(_dir);mx=Math.max(mx,_dir.angleTo(d0)/DEG);});

@@ -32,6 +32,7 @@ It is off by default, and best scores are kept separately for v1 and v2. Wind wi
 | Big Sky, Montana | Lone Mountain Trail |
 | Gallatin Canyon: Lava Lake | US-191 below Gallatin Tower and Skyline Arête, with 2 m lidar terrain around the crags |
 | Downtown Bozeman | Main Street, with buildings |
+| Moab: Pool Arch Canyon | The Pool Arch (Rock of Ages) canyoneering loop above Pritchett Canyon, with 2 m lidar terrain and pins for the arch (approximate), trailhead and exit; Kane Creek Blvd for car work |
 
 Location → **Make a map** builds other US locations from public map data. The built-in maps are for rehearsal only: verify terrain, roads, buildings and airspace on site.
 
